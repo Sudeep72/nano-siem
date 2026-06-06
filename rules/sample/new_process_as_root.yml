@@ -1,0 +1,31 @@
+title: Suspicious Root Process Execution
+id: a5e1b3c2-1234-4abc-8def-000000000007
+status: experimental
+description: >
+  Detects process execution as root from unexpected parent processes,
+  which may indicate lateral movement or persistence.
+author: nano-siem
+date: 2026-06-01
+tags:
+  - attack.execution
+  - attack.t1059
+logsource:
+  product: linux
+  service: syslog
+level: high
+detection:
+  root_exec:
+    message|contains:
+      - 'uid=0'
+      - 'euid=0'
+  shell_indicators:
+    message|contains:
+      - '/bin/bash'
+      - '/bin/sh'
+      - '/bin/zsh'
+      - 'python'
+      - 'perl'
+  condition: root_exec and shell_indicators
+falsepositives:
+  - System startup scripts
+  - Legitimate root administration

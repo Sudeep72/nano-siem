@@ -1,0 +1,34 @@
+ingestion:
+  syslog_host: "0.0.0.0"
+  syslog_port: 5140
+  syslog_protocol: "tcp"
+  json_host: "0.0.0.0"
+  json_port: 5141
+  buffer_size: 4096
+
+storage:
+  db_path: "data/events.db"
+  max_events: 100000
+
+sigma:
+  rules_dir: "rules/"
+  reload_interval: 60
+
+correlation:
+  window_seconds: 120
+  max_events_per_host: 500
+
+ml:
+  model_path: "data/baseline.joblib"
+  train_on_startup: true
+  anomaly_threshold: 0.6
+
+alerting:
+  dedup_window_seconds: 300
+  output_dir: "alerts/"
+  stix_output: true
+  console_output: true
+  min_severity: "low"
+
+logging:
+  level: "INFO"
