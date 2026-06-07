@@ -19,6 +19,7 @@ Output format:
 """
 
 from __future__ import annotations
+
 import json
 import logging
 import re
@@ -126,7 +127,7 @@ def _build_indicator(alert: Alert) -> dict:
 def _build_sighting(alert: Alert, indicator_id: str) -> dict:
     """STIX Sighting — this specific occurrence of the indicator."""
     now = _now_stix()
-    alert_ts = _ts_from_unix(alert.timestamp)
+  #  alert_ts = _ts_from_unix(alert.timestamp)
     return {
         "type": "sighting",
         "spec_version": "2.1",

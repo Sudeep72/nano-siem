@@ -19,6 +19,7 @@ Built-in chains cover the most common attacker playbooks:
 """
 
 from __future__ import annotations
+
 from dataclasses import dataclass, field
 
 

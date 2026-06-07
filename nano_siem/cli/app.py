@@ -9,13 +9,14 @@ Commands:
 """
 
 from __future__ import annotations
+
 import asyncio
 import json
-import sys
+
 import typer
+from rich import print as rprint
 from rich.console import Console
 from rich.table import Table
-from rich import print as rprint
 
 app = typer.Typer(
     name="nano-siem",
@@ -49,8 +50,8 @@ def parse_line(
     line: str = typer.Argument(..., help="Raw log line to parse"),
 ) -> None:
     """Parse and normalize a single log line — useful for testing."""
-    from nano_siem.ingestion.parser import parse
     from nano_siem.ingestion.normalizer import normalize
+    from nano_siem.ingestion.parser import parse
 
     parsed = parse(line)
     event = normalize(parsed)
@@ -77,6 +78,7 @@ def stats(
 ) -> None:
     """Show event counts from the SQLite ring buffer."""
     import yaml
+
     from nano_siem.storage.ringbuffer import EventRingBuffer
 
     with open(config) as f:

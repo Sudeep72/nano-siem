@@ -17,12 +17,12 @@ Memory estimate at defaults (500 events × 200 bytes × 1000 sources = ~100MB ma
 """
 
 from __future__ import annotations
+
 import asyncio
 import logging
 import time
 from collections import defaultdict, deque
-from dataclasses import dataclass, field
-from typing import Iterator
+from dataclasses import dataclass
 
 from nano_siem.schema import NormalizedEvent
 

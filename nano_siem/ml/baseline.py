@@ -24,20 +24,20 @@ Synthetic training data:
 """
 
 from __future__ import annotations
+
 import logging
 import os
 import random
 import time
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
 
 import joblib
 import numpy as np
 from sklearn.ensemble import IsolationForest
 
+from nano_siem.ml.features import FEATURE_NAMES, extract
 from nano_siem.schema import NormalizedEvent
-from nano_siem.ml.features import extract, FEATURE_DIM, FEATURE_NAMES
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +96,7 @@ def _make_clean_event(
 ) -> NormalizedEvent:
     """Construct a synthetic clean NormalizedEvent for training."""
     e = NormalizedEvent()
-    weekday = random.randint(0, 4)     # Monday–Friday
+  #  weekday = random.randint(0, 4)     # Monday–Friday
     e.timestamp = datetime(
         2026, random.randint(1, 5), random.randint(1, 28),
         hour, random.randint(0, 59), random.randint(0, 59),

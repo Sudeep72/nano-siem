@@ -13,31 +13,30 @@ parsing or DB writes.
 """
 
 from __future__ import annotations
+
 import asyncio
 import logging
 import signal
-import sys
-from pathlib import Path
 from typing import Any
 
 import yaml
 
+from nano_siem.alerting.manager import Alert, AlertManager
+from nano_siem.alerting.stix_output import write_alert_log, write_bundle
+from nano_siem.correlation.chainer import Correlator
 from nano_siem.ingestion.listener import (
-    UDPSyslogListener,
-    TCPSyslogListener,
-    TCPJsonListener,
     FileTailListener,
     RawMessage,
+    TCPJsonListener,
+    TCPSyslogListener,
+    UDPSyslogListener,
 )
-from nano_siem.ingestion.parser import parse
 from nano_siem.ingestion.normalizer import normalize
-from nano_siem.storage.ringbuffer import EventRingBuffer
-from nano_siem.schema import NormalizedEvent
-from nano_siem.sigma.evaluator import SigmaEngine, RuleMatch
-from nano_siem.correlation.chainer import Correlator, CorrelationAlert
+from nano_siem.ingestion.parser import parse
 from nano_siem.ml.scorer import AnomalyScorer
-from nano_siem.alerting.manager import AlertManager, Alert
-from nano_siem.alerting.stix_output import write_bundle, write_alert_log
+from nano_siem.schema import NormalizedEvent
+from nano_siem.sigma.evaluator import SigmaEngine
+from nano_siem.storage.ringbuffer import EventRingBuffer
 
 logger = logging.getLogger(__name__)
 
@@ -303,7 +302,7 @@ async def run(config_path: str = "config.yaml", tail_file: str | None = None) ->
     # Start all tasks
     async with asyncio.TaskGroup() as tg:
         # Listeners
-        listener_tasks = [tg.create_task(l.start()) for l in listeners]
+        listener_tasks = [tg.create_task(listener.start()) for listener in listeners]
         # Pipeline consumer
         consumer_task = tg.create_task(
             process_queue(

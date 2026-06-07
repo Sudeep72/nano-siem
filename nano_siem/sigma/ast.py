@@ -34,10 +34,10 @@ Grammar (informal):
 """
 
 from __future__ import annotations
-import fnmatch
+
 import logging
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -90,17 +90,17 @@ class SearchGroup:
 
 @dataclass
 class AndNode:
-    left: "CondNode"
-    right: "CondNode"
+    left: CondNode
+    right: CondNode
 
 @dataclass
 class OrNode:
-    left: "CondNode"
-    right: "CondNode"
+    left: CondNode
+    right: CondNode
 
 @dataclass
 class NotNode:
-    operand: "CondNode"
+    operand: CondNode
 
 @dataclass
 class GroupRef:
@@ -242,7 +242,6 @@ class _Tokenizer:
 
     def _tokenize(self, text: str) -> list[str]:
         # Split on whitespace but keep parentheses as separate tokens
-        import re
         tokens = []
         for part in re.split(r'(\s+|\(|\))', text):
             part = part.strip()

@@ -22,8 +22,8 @@ Severity mapping (unified across sources):
 """
 
 from __future__ import annotations
+
 import hashlib
-import json
 import logging
 import time
 import uuid
@@ -31,10 +31,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from nano_siem.schema import NormalizedEvent
-from nano_siem.sigma.evaluator import RuleMatch
 from nano_siem.correlation.chainer import CorrelationAlert
 from nano_siem.ml.scorer import ScoredEvent
+from nano_siem.schema import NormalizedEvent
+from nano_siem.sigma.evaluator import RuleMatch
 
 logger = logging.getLogger(__name__)
 

@@ -27,15 +27,15 @@ Deduplication:
 """
 
 from __future__ import annotations
-import asyncio
+
 import logging
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Callable, Awaitable
 
-from nano_siem.schema import NormalizedEvent
-from nano_siem.correlation.chains import ChainRule, ChainStep, BUILTIN_CHAINS
+from nano_siem.correlation.chains import BUILTIN_CHAINS, ChainRule, ChainStep
 from nano_siem.correlation.window import SlidingWindowBuffer, WindowedEvent
+from nano_siem.schema import NormalizedEvent
 
 logger = logging.getLogger(__name__)
 

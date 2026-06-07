@@ -13,15 +13,16 @@ It holds the loaded BaselineModel in memory and scores events synchronously
 """
 
 from __future__ import annotations
+
 import asyncio
 import logging
 import os
 import time
 from dataclasses import dataclass
 
-from nano_siem.schema import NormalizedEvent
-from nano_siem.ml.features import extract, top_features, FEATURE_DIM
 from nano_siem.ml.baseline import BaselineModel, load, train_from_corpus
+from nano_siem.ml.features import extract, top_features
+from nano_siem.schema import NormalizedEvent
 
 logger = logging.getLogger(__name__)
 

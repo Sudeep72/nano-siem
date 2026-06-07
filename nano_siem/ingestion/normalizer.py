@@ -16,12 +16,13 @@ Security field extraction covers:
 """
 
 from __future__ import annotations
-import re
+
 import logging
+import re
 from typing import Any
 
-from nano_siem.schema import NormalizedEvent
 from nano_siem.ingestion.parser import ParsedLog
+from nano_siem.schema import NormalizedEvent
 
 logger = logging.getLogger(__name__)
 

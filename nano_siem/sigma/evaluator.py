@@ -18,6 +18,7 @@ Evaluation semantics:
 """
 
 from __future__ import annotations
+
 import asyncio
 import fnmatch
 import logging
@@ -25,15 +26,23 @@ import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 from nano_siem.schema import NormalizedEvent
-from nano_siem.sigma.loader import SigmaRule, load_rules_dir, reload_rules_if_changed
 from nano_siem.sigma.ast import (
-    RuleAST, SearchGroup, FieldMatch, KeywordMatch,
-    AndNode, OrNode, NotNode, GroupRef, AggNode, CondNode,
-    build_ast, ASTBuildError,
+    AggNode,
+    AndNode,
+    ASTBuildError,
+    CondNode,
+    FieldMatch,
+    GroupRef,
+    KeywordMatch,
+    NotNode,
+    OrNode,
+    RuleAST,
+    SearchGroup,
+    build_ast,
 )
+from nano_siem.sigma.loader import SigmaRule, load_rules_dir, reload_rules_if_changed
 
 logger = logging.getLogger(__name__)
 
