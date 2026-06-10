@@ -9,8 +9,9 @@ Usage:
 """
 
 import asyncio
-from nano_siem.ingestion.parser import parse
+
 from nano_siem.ingestion.normalizer import normalize
+from nano_siem.ingestion.parser import parse
 from nano_siem.ml.scorer import AnomalyScorer
 
 LOGS = [

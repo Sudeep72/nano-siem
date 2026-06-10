@@ -6,6 +6,83 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [2.0.0] — 2026-06-07
+
+NanoSIEM v2.0 — Detection Engineering Edition.
+Adds a complete detection engineering toolchain on top of the v1.0 core.
+
+### Added
+
+**MITRE ATT&CK Registry (`detection/mitre.py`)**
+- Built-in ATT&CK Enterprise technique registry (curated subset, v14)
+- `lookup(technique_id)` — case-insensitive, accepts `T1110`, `attack.t1110.001`
+- `techniques_for_tags(tags)` — extract techniques from Sigma rule tag lists
+- `coverage_summary(rules)` — tactic → covered techniques map
+
+**Sigma Rule Validator (`detection/validator.py`)**
+- Schema validation: required fields, valid level/status values
+- AST validation: condition parses, all referenced groups exist
+- Completeness checks: description, author, tags, falsepositives, id
+- MITRE checks: tags follow `attack.tXXXX` format, technique IDs are known
+- Test fixture check: warns if no fixture file found for the rule
+- `validate_rule(path)` → `RuleValidationReport` with ERROR/WARNING/INFO results
+- `validate_rules_dir(dir)` → batch validation, never crashes on bad files
+
+**Rule Unit Tester (`detection/rule_tester.py`)**
+- YAML fixture format: positive and negative test cases per rule
+- `run_rule_tests(rule_path, fixture_path)` → `RuleTestReport`
+- Auto-discovery of fixture files alongside rules or in `tests/fixtures/`
+- Per-test elapsed time measurement
+- `run_all_rule_tests(rules_dir)` → batch test runner
+
+**ATT&CK Coverage Reporter (`detection/coverage.py`)**
+- `build_coverage_report(rules, chains)` → `CoverageReport`
+- Coverage by tactic, technique, and which rules/chains cover each technique
+- Output formats: console table (rich), JSON, Markdown
+- Coverage percentage against known technique registry
+
+**New CLI Commands (v2.0)**
+- `nano-siem validate <path>` — validate rule(s), exit 1 on errors
+- `nano-siem validate <path> --strict` — treat warnings as errors
+- `nano-siem test-rule <path>` — run rule unit tests against fixtures
+- `nano-siem test-rule <path> --fixture <file>` — explicit fixture path
+- `nano-siem coverage` — show ATT&CK coverage table
+- `nano-siem coverage --format json --output coverage.json`
+- `nano-siem coverage --format markdown --output coverage.md`
+- `nano-siem list-rules` — list all loaded rules with level/status/tags
+- `nano-siem list-rules --level high` — filter by severity level
+- `nano-siem --version` — show version string
+
+**New Detection Rules (10 additional, 17 total)**
+- `rules/linux/cron_persistence.yml` — suspicious cron job (T1053.003)
+- `rules/linux/ssh_key_added.yml` — SSH authorized key added (T1098)
+- `rules/linux/passwd_modification.yml` — /etc/passwd modification (T1136)
+- `rules/linux/reverse_shell.yml` — reverse shell patterns (T1059.004) CRITICAL
+- `rules/linux/setuid_binary.yml` — setuid/setgid bit set (T1548.001)
+- `rules/web/sql_injection.yml` — SQL injection attempt (T1190)
+- `rules/web/directory_traversal.yml` — directory traversal (T1190)
+- `rules/web/command_injection.yml` — command injection (T1190, T1059)
+- `rules/network/firewall_drop_spike.yml` — firewall drop rate (T1046)
+- `rules/network/dns_exfiltration.yml` — DNS exfiltration patterns (T1071)
+
+**Test Fixtures**
+- `tests/fixtures/ssh_brute_force.fixture.yml` — 4 test cases
+- `tests/fixtures/privilege_escalation_sudo.fixture.yml` — 3 test cases
+- `tests/fixtures/port_scan_detected.fixture.yml` — 3 test cases
+- `tests/fixtures/reverse_shell.fixture.yml` — 3 test cases
+- `tests/fixtures/sql_injection.fixture.yml` — 3 test cases
+
+**Tests**
+- `tests/test_detection.py` — 48 new tests covering all v2.0 components
+- Total: 282 tests (was 234)
+
+### Changed
+- `pyproject.toml` version bumped to 2.0.0
+- `nano_siem/cli/app.py` — expanded with v2.0 commands, `--version` flag
+- Rule directory structure reorganized: `rules/linux/`, `rules/web/`, `rules/network/`
+
+---
+
 ## [1.0.0] — 2026-06-05
 
 Initial public release of NanoSIEM — a production-grade, minimal-dependency
@@ -31,7 +108,7 @@ SIEM engine built from scratch in Python.
 - Field modifiers: `contains`, `startswith`, `endswith`, `re`, exact
 - YAML rule loader with validation and graceful skip on bad files
 - Hot-reload support: rules reloaded when files change on disk
-- 7 built-in Sigma rules: SSH brute force, login, sudo escalation, port scan, web admin probe, CEF severity, root process execution
+- 7 built-in Sigma rules
 - Event enrichment: `sigma_matches` list and tags populated on match
 
 **Attack Chain Correlation**
@@ -40,72 +117,23 @@ SIEM engine built from scratch in Python.
 - Greedy forward sequence finder — handles noise between steps
 - 6 built-in kill-chain patterns covering the MITRE ATT&CK kill chain
 - Alert deduplication: same (chain, source) within 5 min = one alert
-- `CorrelationAlert` with step-by-step event attribution
 
 **ML Anomaly Detection**
 - Isolation Forest trained on 2000-event synthetic clean baseline
-- 31-dimensional feature extractor covering temporal, network, program, message, severity signals
-- Percentile-calibrated score normalization (1st/99th percentile of training scores)
-- XAI attribution: top-5 features by deviation from baseline on every scored event
-- Async load-or-train on startup, model serialized with joblib
-- Graceful neutral-score fallback before model loads
+- 31-dimensional feature extractor
+- Percentile-calibrated score normalization
+- XAI attribution: top-5 features by deviation from baseline
 
-**Alert Manager**
-- Unified alert object: `sigma`, `correlation`, `ml` source types
-- SHA-256 fingerprint deduplication — same alert within window increments `hit_count`
-- Severity filtering (`min_severity` config)
-- MITRE ATT&CK technique extraction from Sigma rule tags
+**Alert Manager + STIX 2.1 Export**
+- Unified alert object: sigma, correlation, ml source types
+- SHA-256 fingerprint deduplication
+- Valid STIX 2.1 bundles: Indicator + Sighting + ObservedData
+- Deterministic STIX IDs
+- NDJSON alert log
 
-**STIX 2.1 Export**
-- Valid STIX 2.1 bundles: `Indicator` + `Sighting` + `ObservedData`
-- Deterministic STIX IDs — same alert always generates same ID
-- MITRE ATT&CK external references on indicators
-- Custom `x_nano_siem_*` properties: severity, anomaly score, XAI features, chain steps
-- NDJSON alert log for downstream tool integration
-- Date-organized output: `alerts/YYYY-MM-DD/alert-<id>-<type>.json`
-
-**Storage**
-- SQLite ring buffer with WAL mode and 8MB cache
-- Bounded to 100,000 events (configurable) with automatic oldest-first eviction
-- Async-safe via thread pool executor
-- Indexed on timestamp, host, and has_alert
-
-**CLI**
-- `nano-siem run` — start network listeners
-- `nano-siem tail <file>` — tail a local log file
-- `nano-siem parse-line '<log>'` — debug single log line
-- `nano-siem stats` — show ring buffer event count
+**CLI + Storage**
+- `nano-siem run`, `tail`, `parse-line`, `stats`
+- SQLite ring buffer (WAL mode, 100k event cap)
 
 **Tests**
 - 234 tests across 6 modules
-- `test_parser.py` — 27 tests (all 5 formats)
-- `test_normalizer.py` — 26 tests (field mapping, extraction, tagging)
-- `test_sigma.py` — 47 tests (loader, AST, evaluator, engine)
-- `test_correlation.py` — 42 tests (window, step matching, chains)
-- `test_ml.py` — 50 tests (features, training, scoring, XAI)
-- `test_alerting.py` — 42 tests (alert construction, dedup, STIX)
-
-**Documentation and Developer Experience**
-- `README.md` — full architecture diagram, feature matrix, quickstart
-- `ROADMAP.md` — versioned capability plan through v4.0
-- `CONTRIBUTING.md` — contribution guide, code style, PR process
-- `SECURITY.md` — vulnerability reporting policy
-- `config.yaml` — fully documented configuration
-- `demo.sh` — end-to-end 5-phase demonstration
-- `examples/` — runnable usage scripts
-- GitHub Actions CI/CD workflows
-- Issue templates: bug report, feature request, Sigma rule submission
-- Pull request template
-
-### Performance
-
-- Ingestion throughput: ~55,000 events/sec
-- Parse + normalize: 0.018 ms/event
-- End-to-end pipeline: < 0.5 ms/event
-
----
-
-## [Unreleased]
-
-Changes planned for the next release will be listed here.
-See [ROADMAP.md](ROADMAP.md) for the full version plan.

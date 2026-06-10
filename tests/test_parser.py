@@ -5,10 +5,9 @@ Tests every supported format: RFC 5424, RFC 3164, CEF, JSON, plaintext.
 Each test validates that the correct format is detected and key fields parsed.
 """
 
-import pytest
 from datetime import timezone
-from nano_siem.ingestion.parser import parse, ParsedLog
 
+from nano_siem.ingestion.parser import ParsedLog, parse
 
 # ── RFC 5424 ──────────────────────────────────────────────────────────────────
 

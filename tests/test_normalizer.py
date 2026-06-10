@@ -5,9 +5,8 @@ Tests the full parse → normalize pipeline producing NormalizedEvent objects.
 Validates field mapping, IP extraction, auth tagging, and schema completeness.
 """
 
-import pytest
-from nano_siem.ingestion.parser import parse
 from nano_siem.ingestion.normalizer import normalize
+from nano_siem.ingestion.parser import parse
 from nano_siem.schema import NormalizedEvent
 
 

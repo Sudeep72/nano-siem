@@ -11,15 +11,16 @@ Covers:
 
 import asyncio
 import time
-import pytest
 
-from nano_siem.schema import NormalizedEvent
-from nano_siem.correlation.window import SlidingWindowBuffer, WindowedEvent
-from nano_siem.correlation.chains import ChainRule, ChainStep, BUILTIN_CHAINS
 from nano_siem.correlation.chainer import (
-    Correlator, CorrelationAlert, _event_matches_step, _find_sequence
+    CorrelationAlert,
+    Correlator,
+    _event_matches_step,
+    _find_sequence,
 )
-
+from nano_siem.correlation.chains import BUILTIN_CHAINS, ChainRule, ChainStep
+from nano_siem.correlation.window import SlidingWindowBuffer, WindowedEvent
+from nano_siem.schema import NormalizedEvent
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 

@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nano-siem"
-version = "1.0.0"
-description = "A production-grade, minimal-dependency SIEM engine with Sigma detection, attack chain correlation, ML anomaly scoring, and STIX 2.1 export"
+version = "2.0.0"
+description = "A production-grade, minimal-dependency SIEM engine with Sigma detection, ATT&CK coverage reporting, rule validation, attack chain correlation, ML anomaly scoring, and STIX 2.1 export"
 readme = "README.md"
 license = { file = "LICENSE" }
 authors = [
@@ -48,7 +48,7 @@ dev = [
 ]
 
 [project.scripts]
-nano-siem = "nano_siem.cli.app:main"
+nano-siem = "nano_siem.cli.app:app"
 
 [project.urls]
 Homepage = "https://github.com/Sudeep72/nano-siem"

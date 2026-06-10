@@ -1,0 +1,35 @@
+title: Web Command Injection Attempt
+id: b2c4e6f8-1234-4abc-8def-000000000022
+status: stable
+description: >
+  Detects web requests that contain shell command injection patterns.
+  Command injection allows attackers to execute arbitrary system commands
+  through vulnerable web application input fields.
+author: NanoSIEM
+date: 2026-06-01
+tags:
+  - attack.initial_access
+  - attack.execution
+  - attack.t1190
+  - attack.t1059
+logsource:
+  product: webserver
+level: high
+detection:
+  cmd_injection:
+    message|contains:
+      - ';cat '
+      - ';id;'
+      - ';whoami'
+      - '|id'
+      - '|whoami'
+      - '`id`'
+      - '`whoami`'
+      - '$(id)'
+      - '$(whoami)'
+      - ';ls -la'
+      - '&&id'
+  condition: cmd_injection
+falsepositives:
+  - Authorized penetration testing
+  - Security scanners

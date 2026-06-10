@@ -8,16 +8,14 @@ Tests cover:
   - Full engine: load rules dir + evaluate
 """
 
-import pytest
-import tempfile
 import os
-from pathlib import Path
+
+import pytest
 
 from nano_siem.schema import NormalizedEvent
-from nano_siem.sigma.loader import load_rule, load_rules_dir, SigmaRule, SigmaLoadError
-from nano_siem.sigma.ast import build_ast, RuleAST, ASTBuildError
+from nano_siem.sigma.ast import ASTBuildError, build_ast
 from nano_siem.sigma.evaluator import SigmaEngine, evaluate_rule
-
+from nano_siem.sigma.loader import SigmaLoadError, SigmaRule, load_rule, load_rules_dir
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 

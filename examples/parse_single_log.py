@@ -7,13 +7,13 @@ Usage:
     python examples/parse_single_log.py '<34>1 2026-06-02T10:00:00Z web-01 sshd - - - Failed password'
 """
 
-import sys
-import json
 import asyncio
-from nano_siem.ingestion.parser import parse
+import sys
+
 from nano_siem.ingestion.normalizer import normalize
-from nano_siem.sigma.evaluator import SigmaEngine
+from nano_siem.ingestion.parser import parse
 from nano_siem.ml.scorer import AnomalyScorer
+from nano_siem.sigma.evaluator import SigmaEngine
 
 LINE = (
     sys.argv[1]
@@ -55,7 +55,7 @@ asyncio.run(scorer.load_or_train())
 result = scorer.score(event)
 status = "ANOMALOUS" if result.is_anomalous else "NORMAL"
 print(f"  Score  : {result.anomaly_score:.3f} → {status}")
-print(f"  Top drivers:")
+print("  Top drivers:")
 for feat, dev in result.top_features[:3]:
     print(f"    {feat:<30} deviation={dev:.3f}")
 

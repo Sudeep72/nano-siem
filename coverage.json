@@ -1,0 +1,157 @@
+{
+  "total_rules": 17,
+  "total_chains": 6,
+  "techniques_covered": 14,
+  "techniques_known": 25,
+  "coverage_percent": 56.0,
+  "tactics": {
+    "Persistence": [
+      {
+        "technique_id": "T1053.003",
+        "technique_name": "Cron",
+        "covered_by_rules": [
+          "Suspicious Cron Job Added"
+        ],
+        "covered_by_chains": []
+      }
+    ],
+    "Execution": [
+      {
+        "technique_id": "T1059",
+        "technique_name": "Command and Scripting Interpreter",
+        "covered_by_rules": [
+          "Suspicious Root Process Execution",
+          "Web Command Injection Attempt"
+        ],
+        "covered_by_chains": []
+      },
+      {
+        "technique_id": "T1059.004",
+        "technique_name": "Unix Shell",
+        "covered_by_rules": [
+          "Reverse Shell Attempt"
+        ],
+        "covered_by_chains": []
+      }
+    ],
+    "Privilege Escalation": [
+      {
+        "technique_id": "T1548",
+        "technique_name": "Abuse Elevation Control Mechanism",
+        "covered_by_rules": [],
+        "covered_by_chains": [
+          "Full Intrusion Kill Chain"
+        ]
+      },
+      {
+        "technique_id": "T1548.001",
+        "technique_name": "Setuid and Setgid",
+        "covered_by_rules": [
+          "Setuid/Setgid Bit Set on File"
+        ],
+        "covered_by_chains": []
+      },
+      {
+        "technique_id": "T1548.003",
+        "technique_name": "Sudo and Sudo Caching",
+        "covered_by_rules": [
+          "Privilege Escalation via Sudo"
+        ],
+        "covered_by_chains": [
+          "Successful Login Followed by Privilege Escalation"
+        ]
+      }
+    ],
+    "Command and Control": [
+      {
+        "technique_id": "T1071",
+        "technique_name": "Application Layer Protocol",
+        "covered_by_rules": [
+          "Potential DNS Exfiltration"
+        ],
+        "covered_by_chains": []
+      }
+    ],
+    "Discovery": [
+      {
+        "technique_id": "T1046",
+        "technique_name": "Network Service Discovery",
+        "covered_by_rules": [
+          "Firewall Drop Rate Spike",
+          "Port Scan Detected"
+        ],
+        "covered_by_chains": [
+          "Port Scan Followed by Brute Force",
+          "Port Scan \u2192 Web Admin Probe",
+          "Full Intrusion Kill Chain"
+        ]
+      },
+      {
+        "technique_id": "T1083",
+        "technique_name": "File and Directory Discovery",
+        "covered_by_rules": [
+          "Web Admin Panel Access Attempt"
+        ],
+        "covered_by_chains": []
+      }
+    ],
+    "Lateral Movement": [
+      {
+        "technique_id": "T1021.004",
+        "technique_name": "SSH",
+        "covered_by_rules": [
+          "SSH Successful Login"
+        ],
+        "covered_by_chains": []
+      }
+    ],
+    "Credential Access": [
+      {
+        "technique_id": "T1110",
+        "technique_name": "Brute Force",
+        "covered_by_rules": [],
+        "covered_by_chains": [
+          "Port Scan Followed by Brute Force",
+          "Full Intrusion Kill Chain",
+          "Repeated Auth Failures from Single Source"
+        ]
+      },
+      {
+        "technique_id": "T1110.001",
+        "technique_name": "Password Guessing",
+        "covered_by_rules": [
+          "SSH Brute Force Attempt"
+        ],
+        "covered_by_chains": [
+          "Brute Force Followed by Successful Login"
+        ]
+      }
+    ],
+    "Initial Access": [
+      {
+        "technique_id": "T1190",
+        "technique_name": "Exploit Public-Facing Application",
+        "covered_by_rules": [
+          "Web Command Injection Attempt",
+          "Directory Traversal Attempt",
+          "SQL Injection Attempt"
+        ],
+        "covered_by_chains": [
+          "Port Scan \u2192 Web Admin Probe"
+        ]
+      }
+    ],
+    "Defense Evasion": [
+      {
+        "technique_id": "T1078",
+        "technique_name": "Valid Accounts",
+        "covered_by_rules": [],
+        "covered_by_chains": [
+          "Brute Force Followed by Successful Login",
+          "Successful Login Followed by Privilege Escalation",
+          "Full Intrusion Kill Chain"
+        ]
+      }
+    ]
+  }
+}

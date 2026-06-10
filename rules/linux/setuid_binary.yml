@@ -1,0 +1,29 @@
+title: Setuid/Setgid Bit Set on File
+id: b2c4e6f8-1234-4abc-8def-000000000014
+status: stable
+description: >
+  Detects chmod commands setting the setuid or setgid bit on files.
+  Attackers may use setuid binaries to maintain elevated privileges
+  or as a persistence mechanism.
+author: NanoSIEM
+date: 2026-06-01
+tags:
+  - attack.privilege_escalation
+  - attack.t1548.001
+logsource:
+  product: linux
+  service: syslog
+level: high
+detection:
+  setuid_chmod:
+    message|contains:
+      - 'chmod u+s'
+      - 'chmod g+s'
+      - 'chmod 4755'
+      - 'chmod 4777'
+      - 'chmod 2755'
+      - 'chmod 6755'
+  condition: setuid_chmod
+falsepositives:
+  - Package installations that legitimately use setuid binaries (e.g. ping, sudo)
+  - System administrators performing authorized hardening

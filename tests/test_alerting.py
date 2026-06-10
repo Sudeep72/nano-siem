@@ -12,16 +12,17 @@ Covers:
 
 import asyncio
 import json
-import os
-import time
-import pytest
-from pathlib import Path
 from unittest.mock import MagicMock
 
+from nano_siem.alerting.manager import (
+    SEVERITY_RANK,
+    Alert,
+    AlertManager,
+    _fingerprint,
+    _ml_severity,
+)
+from nano_siem.alerting.stix_output import _stix_id, build_bundle, write_alert_log, write_bundle
 from nano_siem.schema import NormalizedEvent
-from nano_siem.alerting.manager import Alert, AlertManager, _fingerprint, _ml_severity, SEVERITY_RANK
-from nano_siem.alerting.stix_output import build_bundle, write_bundle, write_alert_log, _stix_id
-
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 

@@ -1,0 +1,26 @@
+title: Firewall Drop Rate Spike
+id: b2c4e6f8-1234-4abc-8def-000000000030
+status: stable
+description: >
+  Detects a high volume of firewall DROP/REJECT events from a single source,
+  which may indicate port scanning, automated exploitation, or DDoS activity.
+author: NanoSIEM
+date: 2026-06-01
+tags:
+  - attack.discovery
+  - attack.t1046
+logsource:
+  product: network
+  service: firewall
+level: medium
+detection:
+  firewall_drops:
+    message|contains:
+      - 'DROP'
+      - 'REJECT'
+      - 'DENY'
+      - 'BLOCKED'
+  condition: firewall_drops
+falsepositives:
+  - Network scanners run by security team
+  - Misconfigured applications repeatedly hitting closed ports

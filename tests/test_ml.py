@@ -11,20 +11,28 @@ Covers:
 
 import asyncio
 import os
-import pytest
-import tempfile
 from datetime import datetime, timezone
 
-from nano_siem.schema import NormalizedEvent
-from nano_siem.ml.features import (
-    extract, top_features, FEATURE_DIM, FEATURE_NAMES,
-    _is_rfc1918, _port_bucket, _stable_hash,
-)
+import pytest
+
 from nano_siem.ml.baseline import (
-    generate_clean_corpus, train, save, load, BaselineModel,
+    BaselineModel,
+    generate_clean_corpus,
+    load,
+    save,
+    train,
+)
+from nano_siem.ml.features import (
+    FEATURE_DIM,
+    FEATURE_NAMES,
+    _is_rfc1918,
+    _port_bucket,
+    _stable_hash,
+    extract,
+    top_features,
 )
 from nano_siem.ml.scorer import AnomalyScorer, ScoredEvent
-
+from nano_siem.schema import NormalizedEvent
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 

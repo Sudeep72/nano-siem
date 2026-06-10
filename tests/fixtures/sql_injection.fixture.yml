@@ -1,0 +1,14 @@
+title: SQL Injection Fixtures
+rule: rules/web/sql_injection.yml
+tests:
+  - description: "Should fire: UNION SELECT"
+    should_match: true
+    log: '{"host":"web-01","process":"nginx","message":"GET /search?q=1 UNION SELECT username FROM users HTTP/1.1 200","level":"warn"}'
+
+  - description: "Should fire: OR 1=1"
+    should_match: true
+    log: '{"host":"web-01","process":"apache","message":"POST /login?user=admin OR 1=1-- HTTP/1.1 200","level":"warn"}'
+
+  - description: "Should NOT fire: normal search"
+    should_match: false
+    log: '{"host":"web-01","process":"nginx","message":"GET /search?q=python+tutorial HTTP/1.1 200","level":"info"}'
