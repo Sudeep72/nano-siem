@@ -16,17 +16,17 @@ Coverage is calculated per-tactic and shows:
 """
 
 from __future__ import annotations
+
 import json
 from dataclasses import dataclass, field
-from pathlib import Path
 
-from nano_siem.sigma.loader import SigmaRule
+from nano_siem.correlation.chains import BUILTIN_CHAINS, ChainRule
 from nano_siem.detection.mitre import (
-    Technique, techniques_for_tags, REGISTRY,
-    coverage_summary,
+    REGISTRY,
+    Technique,
+    techniques_for_tags,
 )
-from nano_siem.correlation.chains import ChainRule, BUILTIN_CHAINS
-
+from nano_siem.sigma.loader import SigmaRule
 
 # ── All tactics in ATT&CK Enterprise (ordered) ───────────────────────────────
 TACTIC_ORDER = [

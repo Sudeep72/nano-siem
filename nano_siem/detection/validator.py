@@ -18,14 +18,14 @@ ERRORs block the rule from loading. WARNINGs are advisory.
 """
 
 from __future__ import annotations
+
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any
 
-from nano_siem.sigma.loader import SigmaRule, load_rule, SigmaLoadError
-from nano_siem.sigma.ast import build_ast, ASTBuildError
 from nano_siem.detection.mitre import lookup as mitre_lookup
+from nano_siem.sigma.ast import ASTBuildError, build_ast
+from nano_siem.sigma.loader import SigmaLoadError, SigmaRule, load_rule
 
 
 class Severity(str, Enum):

@@ -27,18 +27,18 @@ Run with:
 """
 
 from __future__ import annotations
+
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
 import yaml
 
-from nano_siem.ingestion.parser import parse
 from nano_siem.ingestion.normalizer import normalize
-from nano_siem.sigma.loader import load_rule, SigmaLoadError
-from nano_siem.sigma.ast import build_ast, ASTBuildError
+from nano_siem.ingestion.parser import parse
+from nano_siem.sigma.ast import ASTBuildError, build_ast
 from nano_siem.sigma.evaluator import evaluate_rule
+from nano_siem.sigma.loader import SigmaLoadError, load_rule
 
 
 @dataclass
