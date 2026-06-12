@@ -6,8 +6,8 @@ Pydantic handles serialization and OpenAPI schema generation automatically.
 """
 
 from __future__ import annotations
+
 from pydantic import BaseModel
-from typing import Any
 
 
 class AlertModel(BaseModel):

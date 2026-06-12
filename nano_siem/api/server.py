@@ -20,8 +20,8 @@ WebSocket clients receive every event+alert as it fires — no polling needed.
 """
 
 from __future__ import annotations
+
 import asyncio
-import json
 import logging
 import time
 from contextlib import asynccontextmanager
@@ -29,12 +29,17 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from nano_siem.api.models import (
-    AlertModel, EventModel, StatsModel, RuleModel,
-    CoverageModel, ChainModel, HealthModel,
+    AlertModel,
+    ChainModel,
+    CoverageModel,
+    EventModel,
+    HealthModel,
+    RuleModel,
+    StatsModel,
 )
 from nano_siem.api.pipeline import PipelineManager
 
@@ -215,8 +220,8 @@ async def get_chains():
 async def get_coverage():
     if not _pipeline or not _pipeline.sigma_engine:
         raise HTTPException(503, "Pipeline not running")
-    from nano_siem.detection.coverage import build_coverage_report
     from nano_siem.correlation.chains import BUILTIN_CHAINS
+    from nano_siem.detection.coverage import build_coverage_report
     rules = _pipeline.sigma_engine._rules
     report = build_coverage_report(rules, BUILTIN_CHAINS)
     d = report.to_dict()

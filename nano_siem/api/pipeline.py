@@ -17,26 +17,28 @@ Architecture:
 """
 
 from __future__ import annotations
+
 import asyncio
 import collections
-import json
 import logging
 import time
 from typing import Any
 
-from nano_siem.ingestion.listener import (
-    UDPSyslogListener, TCPSyslogListener, TCPJsonListener, RawMessage,
-)
-from nano_siem.ingestion.parser import parse
-from nano_siem.ingestion.normalizer import normalize
-from nano_siem.sigma.evaluator import SigmaEngine
+from nano_siem.alerting.manager import Alert, AlertManager
+from nano_siem.alerting.stix_output import write_alert_log, write_bundle
 from nano_siem.correlation.chainer import Correlator
 from nano_siem.correlation.chains import BUILTIN_CHAINS
+from nano_siem.ingestion.listener import (
+    RawMessage,
+    TCPJsonListener,
+    TCPSyslogListener,
+    UDPSyslogListener,
+)
+from nano_siem.ingestion.normalizer import normalize
+from nano_siem.ingestion.parser import parse
 from nano_siem.ml.scorer import AnomalyScorer
-from nano_siem.alerting.manager import AlertManager, Alert
-from nano_siem.alerting.stix_output import write_bundle, write_alert_log
+from nano_siem.sigma.evaluator import SigmaEngine
 from nano_siem.storage.ringbuffer import EventRingBuffer
-from nano_siem.schema import NormalizedEvent
 
 logger = logging.getLogger(__name__)
 
