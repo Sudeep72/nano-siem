@@ -17,16 +17,16 @@ v2.0 commands (Detection Engineering):
 """
 
 from __future__ import annotations
-
 import asyncio
 import json
+import sys
 from pathlib import Path
 
 import typer
-from rich import print as rprint
 from rich.console import Console
-from rich.panel import Panel
 from rich.table import Table
+from rich.panel import Panel
+from rich import print as rprint
 
 app = typer.Typer(
     name="nano-siem",
@@ -36,7 +36,7 @@ app = typer.Typer(
 )
 console = Console()
 
-VERSION = "2.0.0"
+VERSION = "3.0.0"
 
 
 # ── v1.0 Commands ─────────────────────────────────────────────────────────────
@@ -65,8 +65,8 @@ def parse_line(
     line: str = typer.Argument(..., help="Raw log line to parse and normalize"),
 ) -> None:
     """Parse and normalize a single log line — useful for debugging rules."""
-    from nano_siem.ingestion.normalizer import normalize
     from nano_siem.ingestion.parser import parse
+    from nano_siem.ingestion.normalizer import normalize
 
     parsed = parse(line)
     event = normalize(parsed)
@@ -93,7 +93,6 @@ def stats(
 ) -> None:
     """Show event counts from the SQLite ring buffer."""
     import yaml
-
     from nano_siem.storage.ringbuffer import EventRingBuffer
 
     with open(config) as f:
@@ -123,7 +122,7 @@ def validate(
       nano-siem validate rules/
       nano-siem validate rules/ --strict
     """
-    from nano_siem.detection.validator import Severity, validate_rule, validate_rules_dir
+    from nano_siem.detection.validator import validate_rule, validate_rules_dir, Severity
 
     target = Path(path)
     if target.is_dir():
@@ -179,7 +178,7 @@ def test_rule(
       nano-siem test-rule rules/sample/ssh_brute_force.yml
       nano-siem test-rule rules/
     """
-    from nano_siem.detection.rule_tester import run_all_rule_tests, run_rule_tests
+    from nano_siem.detection.rule_tester import run_rule_tests, run_all_rule_tests
 
     target = Path(path)
 
@@ -244,9 +243,9 @@ def coverage(
       nano-siem coverage --format json --output coverage.json
       nano-siem coverage --format markdown --output coverage.md
     """
-    from nano_siem.correlation.chains import BUILTIN_CHAINS
-    from nano_siem.detection.coverage import TACTIC_ORDER, build_coverage_report
     from nano_siem.sigma.loader import load_rules_dir
+    from nano_siem.correlation.chains import BUILTIN_CHAINS
+    from nano_siem.detection.coverage import build_coverage_report, TACTIC_ORDER
 
     rules = load_rules_dir(rules_dir)
     report = build_coverage_report(rules, BUILTIN_CHAINS)
@@ -313,6 +312,7 @@ def list_rules(
 ) -> None:
     """List all Sigma rules in the rules directory."""
     from nano_siem.sigma.loader import load_rules_dir
+    from nano_siem.sigma.loader import LEVEL_PRIORITY
 
     rules = load_rules_dir(rules_dir)
 
@@ -350,6 +350,45 @@ def list_rules(
     console.print(table)
     console.print(f"\n[dim]Rules directory: {rules_dir}[/dim]")
 
+
+
+
+@app.command()
+def api(
+    host: str = typer.Option("0.0.0.0", "--host", help="API server host"),
+    port: int = typer.Option(8000, "--port", "-p", help="API server port"),
+    config: str = typer.Option("config.yaml", "--config", "-c", help="Path to config.yaml"),
+    reload: bool = typer.Option(False, "--reload", help="Auto-reload on code changes (dev mode)"),
+) -> None:
+    """
+    Start the NanoSIEM REST API + WebSocket server for the v3 dashboard.
+
+    [bold]Examples:[/bold]
+      nano-siem api
+      nano-siem api --port 8080
+      nano-siem api --reload   (dev mode)
+    """
+    import os
+    os.environ["NANOSIEM_CONFIG"] = config
+    try:
+        import uvicorn
+    except ImportError:
+        rprint("[red]uvicorn not installed. Run: pip install uvicorn[/red]")
+        raise typer.Exit(1)
+
+    rprint(f"[bold cyan]NanoSIEM API v3.0.0[/bold cyan] starting on [green]http://{host}:{port}[/green]")
+    rprint(f"[dim]Docs: http://{host}:{port}/docs[/dim]")
+    rprint(f"[dim]WebSocket: ws://{host}:{port}/ws/events[/dim]")
+    rprint(f"[dim]Dashboard: http://localhost:5173 (run: cd dashboard && npm run dev)[/dim]")
+    rprint()
+
+    uvicorn.run(
+        "nano_siem.api.server:app",
+        host=host,
+        port=port,
+        reload=reload,
+        log_level="info",
+    )
 
 @app.callback(invoke_without_command=True)
 def main(

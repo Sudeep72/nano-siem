@@ -1,0 +1,67 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg-primary:    #0a0f1e;
+  --bg-secondary:  #0f172a;
+  --bg-card:       #1e293b;
+  --bg-card-hover: #263348;
+  --border:        #334155;
+  --text-primary:  #f1f5f9;
+  --text-secondary:#94a3b8;
+  --text-muted:    #475569;
+  --accent-cyan:   #06b6d4;
+  --accent-blue:   #3b82f6;
+  --sev-critical:  #ef4444;
+  --sev-high:      #f97316;
+  --sev-medium:    #eab308;
+  --sev-low:       #3b82f6;
+  --sev-info:      #6b7280;
+  --green:         #22c55e;
+  --red:           #ef4444;
+  --font: 'Inter', 'SF Pro Display', -apple-system, sans-serif;
+  --mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+}
+
+html, body, #root {
+  height: 100%;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-secondary); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+.sev-critical { color: var(--sev-critical); }
+.sev-high     { color: var(--sev-high); }
+.sev-medium   { color: var(--sev-medium); }
+.sev-low      { color: var(--sev-low); }
+.sev-info     { color: var(--sev-info); }
+
+.badge {
+  display: inline-flex; align-items: center;
+  padding: 1px 8px; border-radius: 4px;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+.badge-critical { background: #7f1d1d44; color: var(--sev-critical); border: 1px solid #7f1d1d; }
+.badge-high     { background: #7c2d1244; color: var(--sev-high);     border: 1px solid #7c2d12; }
+.badge-medium   { background: #71350444; color: var(--sev-medium);   border: 1px solid #713504; }
+.badge-low      { background: #1d3a6e44; color: var(--sev-low);      border: 1px solid #1d3a6e; }
+.badge-sigma    { background: #312e8144; color: #a78bfa; border: 1px solid #312e81; }
+.badge-correlation { background: #0c4a6e44; color: #38bdf8; border: 1px solid #0c4a6e; }
+.badge-ml       { background: #14532d44; color: #4ade80; border: 1px solid #14532d; }
+
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.mono { font-family: var(--mono); }
