@@ -31,6 +31,7 @@ from typing import Any
 import yaml
 from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel as PydanticBase
 
 from nano_siem.api.models import (
     AlertModel,
@@ -42,6 +43,11 @@ from nano_siem.api.models import (
     StatsModel,
 )
 from nano_siem.api.pipeline import PipelineManager
+from nano_siem.detection.quality import assess_all_rules
+from nano_siem.enrichment.threat_intel import ThreatIntelEnricher
+from nano_siem.reasoning.engine import ReasoningEngine
+from nano_siem.reasoning.knowledge_graph import build_knowledge_graph, describe_entity
+from nano_siem.reasoning.replay import build_replay, build_replay_with_commentary
 
 logger = logging.getLogger(__name__)
 
@@ -263,11 +269,6 @@ async def websocket_events(ws: WebSocket):
 # These endpoints receive already-generated alerts and return AI explanations.
 # Gemini never performs detection — only narrates confirmed alerts.
 
-from pydantic import BaseModel as PydanticBase
-
-from nano_siem.reasoning.engine import ReasoningEngine
-
-
 class AIRequest(PydanticBase):
     alert_id: str | None = None
     alert_ids: list[str] | None = None
@@ -386,7 +387,112 @@ async def ai_status():
     engine = _get_reasoning()
     return {
         "configured": engine.is_configured,
-        "model": "gemini-2.5-flash",
+        "model": "gemini-1.5-flash",
         "stats": engine.get_stats(),
         "api_key_set": bool(os.environ.get("GEMINI_API_KEY")),
     }
+
+
+# ── v2.1 / v3.1 / v4.1 endpoints ──────────────────────────────────────────────
+# Rule quality metrics, hot reload status, threat intel enrichment,
+# knowledge graph, and attack replay.
+
+_enricher: ThreatIntelEnricher | None = None
+
+def _get_enricher() -> ThreatIntelEnricher:
+    global _enricher
+    if _enricher is None:
+        _enricher = ThreatIntelEnricher()
+    return _enricher
+
+
+@app.get("/api/quality")
+async def get_quality():
+    """Rule quality metrics: complexity, specificity, FP risk, overlaps."""
+    if not _pipeline or not _pipeline.sigma_engine:
+        raise HTTPException(503, "Pipeline not running")
+    reports = assess_all_rules(_pipeline.sigma_engine._rules)
+    avg_score = sum(r.maintenance_score for r in reports) / len(reports) if reports else 0
+    return {
+        "rules": [r.to_dict() for r in reports],
+        "average_maintenance_score": round(avg_score, 1),
+        "high_fp_risk_count": sum(1 for r in reports if r.fp_risk == "high"),
+    }
+
+
+@app.get("/api/reload/status")
+async def reload_status():
+    """Hot reload manager status and history."""
+    if not _pipeline:
+        raise HTTPException(503, "Pipeline not running")
+    if not hasattr(_pipeline, "_hot_reload") or _pipeline._hot_reload is None:
+        return {
+            "enabled": False,
+            "message": "Hot reload manager not active on this pipeline instance",
+        }
+    return {"enabled": True, **_pipeline._hot_reload.get_stats()}
+
+
+@app.get("/api/enrich/{ip}")
+async def enrich_ip(ip: str):
+    """Enrich an IP address with geolocation and reputation data."""
+    enricher = _get_enricher()
+    result = await enricher.enrich(ip)
+    return result.to_dict()
+
+
+@app.get("/api/graph")
+async def get_knowledge_graph():
+    """Build a knowledge graph from recent alerts."""
+    if not _pipeline:
+        raise HTTPException(503, "Pipeline not running")
+    alerts = _pipeline.get_recent_alerts(limit=200)
+    graph = build_knowledge_graph(alerts)
+    return graph.to_dict()
+
+
+@app.get("/api/graph/{entity_id}")
+async def get_graph_entity(entity_id: str, depth: int = Query(1, ge=1, le=3)):
+    """Get a subgraph and description for a specific entity (e.g. 'ip:203.0.113.5')."""
+    if not _pipeline:
+        raise HTTPException(503, "Pipeline not running")
+    alerts = _pipeline.get_recent_alerts(limit=200)
+    graph = build_knowledge_graph(alerts)
+    if entity_id not in graph.nodes:
+        raise HTTPException(404, f"Entity '{entity_id}' not found in graph")
+    sub = graph.subgraph_for(entity_id, depth=depth)
+    return {
+        "description": describe_entity(graph, entity_id),
+        "graph": sub.to_dict(),
+    }
+
+
+@app.post("/api/replay")
+async def replay_alert(req: AIRequest):
+    """
+    Replay a correlation alert step-by-step.
+    Set req.alert_id. If GEMINI_API_KEY is configured, pass with_ai via
+    the 'period' field set to 'ai' to include AI commentary (reuses AIRequest schema).
+    """
+    if not req.alert_id:
+        raise HTTPException(400, "alert_id required")
+    alert = _get_alert_by_id(req.alert_id)
+    if not alert:
+        raise HTTPException(404, f"Alert {req.alert_id} not found")
+
+    with_ai = req.period == "ai"
+    try:
+        if with_ai:
+            engine = _get_reasoning()
+            if not engine.is_configured:
+                session = build_replay(alert)
+            else:
+                session = await build_replay_with_commentary(alert, engine)
+        else:
+            session = build_replay(alert)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+    return session.to_dict()
+
+

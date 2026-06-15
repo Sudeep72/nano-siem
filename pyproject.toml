@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nano-siem"
-version = "4.0.0"
+version = "4.1.0"
 description = "A production-grade, minimal-dependency SIEM engine with Sigma detection, ATT&CK coverage reporting, rule validation, attack chain correlation, ML anomaly scoring, STIX 2.1 export, SOC dashboard, and AI-powered incident reasoning"
 readme = "README.md"
 license = { file = "LICENSE" }

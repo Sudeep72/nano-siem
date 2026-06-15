@@ -113,7 +113,7 @@ class TestGeminiClient:
         assert not client.is_configured
 
     def test_configured_when_key_set(self):
-        client = GeminiClient(api_key=os.environ["GOOGLE_API_KEY"])
+        client = GeminiClient(api_key="test-key-not-a-real-credential")
         assert client.is_configured
 
     def test_generate_raises_when_unconfigured(self):
@@ -350,7 +350,7 @@ class TestReasoningEngine:
         assert not engine.is_configured
 
     def test_is_configured_true_with_key(self):
-        engine = ReasoningEngine(api_key="AIzaSyFakeKey1234567890abcdefghijklmnop")
+        engine = ReasoningEngine(api_key="test-key-not-a-real-credential-2")
         assert engine.is_configured
 
     def test_elapsed_time_recorded(self):

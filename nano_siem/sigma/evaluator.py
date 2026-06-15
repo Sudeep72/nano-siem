@@ -271,6 +271,22 @@ class SigmaEngine:
         logger.info("Sigma engine: %d rules loaded and compiled", len(self._rules))
         return len(self._rules)
 
+    def set_rules(self, rules: list[SigmaRule]) -> int:
+        """
+        Replace the active rule set with an externally-provided (already-loaded)
+        list of SigmaRule objects, compiling each to an AST.
+
+        Used by HotReloadManager to push a validated rule set live without
+        re-reading from disk (the caller has already loaded + validated).
+        Returns the number of successfully compiled rules.
+        """
+        compiled = self._compile_rules(rules)
+        self._rules = [r for r, _ in compiled]
+        self._asts = {r.id or r.title: ast for r, ast in compiled}
+        self._last_reload = time.time()
+        logger.info("Sigma engine: rule set updated live — %d rules compiled", len(self._rules))
+        return len(self._rules)
+
     def _compile_rules(
         self, rules: list[SigmaRule]
     ) -> list[tuple[SigmaRule, RuleAST]]:

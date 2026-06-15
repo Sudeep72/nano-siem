@@ -1,3 +1,84 @@
+## [4.1.0] — 2026-06-13
+
+Patch release adding 5 missing roadmap features across v2/v3/v4.
+Tests: 428 (was 332). No breaking changes.
+
+### Added
+
+**Rule Quality Metrics (v2.1) — `detection/quality.py`**
+- `assess_rule_quality(rule)` — composite 0-100 maintenance score
+- Complexity score: AST depth + node count + field modifier count
+- Specificity score: field-match ratio, keyword length, not-filter bonus
+- FP risk estimate: low/medium/high with human-readable reasons
+- Overlap detection: Jaccard similarity across all rule keyword sets
+- `assess_all_rules(rules)` — batch assessment with shared overlap map
+- CLI: `nano-siem quality` (sortable table with FP-risk reasons for high-risk rules)
+- API: `GET /api/quality`
+
+**Rule Hot Reload (v2.1) — `detection/hot_reload.py`**
+- `HotReloadManager` — file-watch loop with configurable check interval
+- Validates before swap: broken rules never replace a working rule set
+- `ReloadEvent` history with changed_files, errors, and timestamp
+- `set_on_reload(callback)` — hook for live rule set updates
+- `check_once()` for CLI/manual use, `start()/stop()` for async loop
+- Wired into `api/pipeline.py` via `_on_rules_reloaded` → `SigmaEngine.set_rules()`
+- `SigmaEngine.set_rules(rules)` — new method for live rule set replacement
+- CLI: `nano-siem watch-rules` (--once / --interval flags)
+- API: `GET /api/reload/status`
+
+**Threat Intelligence Enrichment (v3.1) — `enrichment/threat_intel.py`**
+- `ThreatIntelEnricher` — async IP enrichment with in-memory cache (1hr TTL)
+- Geolocation via ip-api.com (free, no key, 45 req/min rate-limited)
+- IP reputation via AbuseIPDB free tier (optional `ABUSEIPDB_API_KEY`)
+- Private/RFC1918/loopback IPs tagged locally, no external call
+- `EnrichmentResult.risk_level` property: internal/unknown/low/medium/high
+- AbuseIPDB category code mapping for human-readable abuse type labels
+- CLI: `nano-siem enrich <ip>`
+- API: `GET /api/enrich/{ip}`
+
+**Knowledge Graph (v4.1) — `reasoning/knowledge_graph.py`**
+- `build_knowledge_graph(alerts)` — entity relationship graph from alert list
+- Node types: source_ip, host, alert, technique, tactic, chain
+- Edge relations: fired, affects, maps_to, belongs_to, part_of
+- `describe_entity(graph, entity_id)` — plain-English summary with
+  technique/tactic aggregation across connected alerts (2-hop traversal)
+- `subgraph_for(node_id, depth)` — bounded subgraph extraction
+- Add-node merging with deduplication; no-duplicate edge enforcement
+- API: `GET /api/graph`, `GET /api/graph/{entity_id}?depth=`
+
+**Attack Replay Engine (v4.1) — `reasoning/replay.py`**
+- `build_replay(alert)` — converts correlation alert chain_steps into
+  `ReplaySession`/`ReplayStep` with distributed timestamps
+- `build_replay_with_commentary(alert, engine)` — per-step Gemini commentary
+  + overall threat narrative via ReasoningEngine
+- Raises `ValueError` for non-correlation alerts or empty chain_steps
+- CLI: `nano-siem replay <alert_file> [--ai]`
+- API: `POST /api/replay`
+
+### New CLI commands
+- `nano-siem quality` — rule quality report
+- `nano-siem watch-rules` — hot reload watcher
+- `nano-siem enrich <ip>` — IP enrichment panel
+- `nano-siem replay <file> [--ai]` — step-through attack replay
+
+### New API endpoints
+- `GET  /api/quality` — rule quality metrics
+- `GET  /api/reload/status` — hot reload status and history
+- `GET  /api/enrich/{ip}` — IP geolocation + reputation
+- `GET  /api/graph` — full knowledge graph from recent alerts
+- `GET  /api/graph/{entity_id}?depth=` — entity subgraph + description
+- `POST /api/replay` — attack replay session
+
+### Tests (96 new, 428 total)
+- `tests/test_quality.py` — 26 tests
+- `tests/test_hot_reload.py` — 14 tests
+- `tests/test_enrichment.py` — 26 tests
+- `tests/test_knowledge_graph.py` — 24 tests
+- `tests/test_replay.py` — 21 tests (with mocked Gemini)
+
+
+---
+
 ## [4.0.0] — 2026-06-07
 
 NanoSIEM v4.0 — AI Reasoning Edition.

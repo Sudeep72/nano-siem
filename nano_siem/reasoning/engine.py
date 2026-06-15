@@ -112,7 +112,7 @@ class ReasoningEngine:
             return AIResult(
                 task=task,
                 content="",
-                model="gemini-2.5-flash",
+                model="gemini-1.5-flash",
                 prompt_tokens=0,
                 output_tokens=0,
                 elapsed_seconds=round(elapsed, 2),

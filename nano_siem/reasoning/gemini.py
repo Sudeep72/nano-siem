@@ -2,7 +2,7 @@
 reasoning/gemini.py — Gemini API Client
 
 Thin async wrapper around the Google AI Studio REST API
-(gemini-2.5-flash, free tier).
+(gemini-1.5-flash, free tier).
 
 DESIGN CONSTRAINT (non-negotiable):
   Gemini NEVER performs detection.
@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 GEMINI_API_URL = (
     "https://generativelanguage.googleapis.com/v1beta/models/"
-    "gemini-2.5-flash:generateContent"
+    "gemini-1.5-flash:generateContent"
 )
 
 # Rate limiting — free tier is 15 req/min
@@ -72,9 +72,9 @@ class GeminiClient:
     def __init__(
         self,
         api_key: str | None = None,
-        model: str = "gemini-2.5-flash",
+        model: str = "gemini-1.5-flash",
         temperature: float = 0.3,
-        max_output_tokens: int = 4096,
+        max_output_tokens: int = 1500,
     ) -> None:
         self._api_key = api_key or os.environ.get("GEMINI_API_KEY", "")
         self._model = model

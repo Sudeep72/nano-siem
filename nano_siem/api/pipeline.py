@@ -85,6 +85,7 @@ class PipelineManager:
 
         # Components (initialized in start())
         self.sigma_engine: SigmaEngine | None = None
+        self._hot_reload = None
         self._correlator: Correlator | None = None
         self._scorer: AnomalyScorer | None = None
         self._alert_manager: AlertManager | None = None
@@ -118,6 +119,16 @@ class PipelineManager:
         )
         self.sigma_engine.load()
         logger.info("Sigma engine: %d rules loaded", self.sigma_engine.rule_count)
+
+        # Hot reload manager — watches rules dir, validates before swap,
+        # updates sigma_engine's rule set live
+        from nano_siem.detection.hot_reload import HotReloadManager
+        rules_dir = sigma_cfg.get("rules_dir", "rules/")
+        self._hot_reload = HotReloadManager(
+            rules_dir,
+            check_interval=sigma_cfg.get("reload_interval", 60),
+        )
+        self._hot_reload.set_on_reload(self._on_rules_reloaded)
 
         # Correlator
         self._correlator = Correlator(
@@ -183,18 +194,29 @@ class PipelineManager:
         stats_updater = loop.create_task(self._update_stats_loop())
         self._tasks.append(stats_updater)
 
+        if self._hot_reload:
+            await self._hot_reload.start()
+
         logger.info("PipelineManager started — %d listeners, pipeline consumer running",
                     len(listeners))
 
     async def stop(self) -> None:
         """Cancel all background tasks and close storage."""
         self._running = False
+        if self._hot_reload:
+            await self._hot_reload.stop()
         for task in self._tasks:
             task.cancel()
         await asyncio.gather(*self._tasks, return_exceptions=True)
         if self._storage:
             self._storage.close()
         logger.info("PipelineManager stopped")
+
+    def _on_rules_reloaded(self, new_rules) -> None:
+        """Callback fired by HotReloadManager when rules change and pass validation."""
+        if self.sigma_engine:
+            self.sigma_engine.set_rules(new_rules)
+            logger.info("Sigma engine rule set updated live: %d rules", len(new_rules))
 
     async def _consume(self) -> None:
         """Main pipeline consumer — runs for the lifetime of the server."""

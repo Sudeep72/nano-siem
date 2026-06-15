@@ -39,7 +39,7 @@ app = typer.Typer(
 )
 console = Console()
 
-VERSION = "4.0.0"
+VERSION = "4.1.0"
 
 
 # ── v1.0 Commands ─────────────────────────────────────────────────────────────
@@ -396,6 +396,261 @@ def api(
 
 
 # ── Main callback ─────────────────────────────────────────────────────────────
+
+
+@app.command()
+def quality(
+    rules_dir: str = typer.Option("rules/", "--rules", "-r", help="Rules directory"),
+    sort_by: str = typer.Option("maintenance", "--sort", "-s",
+                                help="Sort by: maintenance | specificity | complexity | fp_risk"),
+) -> None:
+    """
+    Show rule quality metrics — complexity, specificity, FP risk, overlaps.
+
+    [bold]Examples:[/bold]
+      nano-siem quality
+      nano-siem quality --sort fp_risk
+    """
+    from nano_siem.detection.quality import assess_all_rules
+    from nano_siem.sigma.loader import load_rules_dir
+
+    rules = load_rules_dir(rules_dir)
+    if not rules:
+        rprint("[yellow]No rules found.[/yellow]")
+        raise typer.Exit(0)
+
+    reports = assess_all_rules(rules)
+
+    sort_keys = {
+        "maintenance": lambda r: r.maintenance_score,
+        "specificity": lambda r: r.specificity_score,
+        "complexity": lambda r: -r.complexity_score,
+        "fp_risk": lambda r: {"high": 0, "medium": 1, "low": 2}[r.fp_risk],
+    }
+    reports.sort(key=sort_keys.get(sort_by, sort_keys["maintenance"]))
+
+    table = Table(title=f"Rule Quality Report ({len(reports)} rules)", header_style="bold cyan")
+    table.add_column("Maintenance", width=12)
+    table.add_column("Rule", width=38)
+    table.add_column("Specificity", width=12)
+    table.add_column("Complexity", width=11)
+    table.add_column("FP Risk", width=9)
+    table.add_column("Overlaps", width=30)
+
+    risk_colors = {"low": "green", "medium": "yellow", "high": "red"}
+
+    for r in reports:
+        score_color = "green" if r.maintenance_score >= 70 else "yellow" if r.maintenance_score >= 40 else "red"
+        risk_color = risk_colors[r.fp_risk]
+        overlaps = ", ".join(r.overlaps_with[:2]) if r.overlaps_with else "—"
+        if len(r.overlaps_with) > 2:
+            overlaps += f" (+{len(r.overlaps_with)-2})"
+        table.add_row(
+            f"[{score_color}]{r.maintenance_score}/100[/{score_color}]",
+            r.rule_title,
+            f"{r.specificity_score:.0f}/100",
+            str(r.complexity_score),
+            f"[{risk_color}]{r.fp_risk.upper()}[/{risk_color}]",
+            overlaps,
+        )
+
+    console.print(table)
+
+    high_risk = [r for r in reports if r.fp_risk == "high"]
+    if high_risk:
+        console.print("\n[bold red]High FP-risk rules — reasons:[/bold red]")
+        for r in high_risk:
+            console.print(f"  [bold]{r.rule_title}[/bold]")
+            for reason in r.fp_risk_reasons:
+                console.print(f"    [dim]- {reason}[/dim]")
+
+    avg_score = sum(r.maintenance_score for r in reports) / len(reports)
+    console.print(f"\n[bold]Average maintenance score:[/bold] {avg_score:.1f}/100")
+
+
+@app.command(name="watch-rules")
+def watch_rules(
+    rules_dir: str = typer.Option("rules/", "--rules", "-r", help="Rules directory"),
+    interval: float = typer.Option(5.0, "--interval", "-i", help="Check interval (seconds)"),
+    once: bool = typer.Option(False, "--once", help="Check once and exit (don't loop)"),
+) -> None:
+    """
+    Watch a rules directory for changes and hot-reload (validates before swapping).
+
+    [bold]Examples:[/bold]
+      nano-siem watch-rules
+      nano-siem watch-rules --once
+      nano-siem watch-rules --interval 2
+    """
+    import time as _time
+
+    from nano_siem.detection.hot_reload import HotReloadManager
+
+    manager = HotReloadManager(rules_dir, check_interval=interval)
+    rprint(f"[cyan]Watching[/cyan] {rules_dir} ({manager.rule_count} rules loaded) "
+          f"[dim]every {interval}s[/dim]")
+
+    if once:
+        changed, rules, event = manager.check_once()
+        if not changed:
+            rprint("[dim]No changes detected.[/dim]")
+        elif event and event.success:
+            rprint(f"[green]✓ Reloaded[/green] — {event.rule_count} rules, "
+                  f"changed: {', '.join(event.changed_files)}")
+        elif event:
+            rprint("[red]✗ Reload aborted[/red] — validation errors:")
+            for err in event.errors:
+                rprint(f"  [red]{err}[/red]")
+        raise typer.Exit(0)
+
+    rprint("[dim]Press Ctrl+C to stop.[/dim]\n")
+    try:
+        while True:
+            changed, rules, event = manager.check_once()
+            if changed and event:
+                if event.success:
+                    rprint(f"[green]✓ Reloaded[/green] — {event.rule_count} rules, "
+                          f"changed: {', '.join(event.changed_files)}")
+                else:
+                    rprint("[red]✗ Reload aborted[/red] — keeping previous rule set")
+                    for err in event.errors:
+                        rprint(f"  [red]{err}[/red]")
+            _time.sleep(interval)
+    except KeyboardInterrupt:
+        stats = manager.get_stats()
+        rprint(f"\n[dim]Stopped. Total reloads: {stats['total_reloads']} "
+              f"({stats['successful_reloads']} ok, {stats['failed_reloads']} failed)[/dim]")
+
+
+@app.command()
+def enrich(
+    ip: str = typer.Argument(..., help="IP address to enrich"),
+) -> None:
+    """
+    Enrich an IP address with geolocation and reputation data.
+
+    [bold]Examples:[/bold]
+      nano-siem enrich 8.8.8.8
+      nano-siem enrich 192.168.1.1
+    """
+    from nano_siem.enrichment.threat_intel import ThreatIntelEnricher
+
+    enricher = ThreatIntelEnricher()
+    result = asyncio.run(enricher.enrich(ip))
+
+    if result.is_private:
+        rprint(f"[cyan]{ip}[/cyan] is a [dim]private/reserved[/dim] address — no external lookup performed")
+        raise typer.Exit(0)
+
+    if result.error and not result.sources:
+        rprint(f"[red]Enrichment failed:[/red] {result.error}")
+        raise typer.Exit(1)
+
+    risk_colors = {"low": "green", "medium": "yellow", "high": "red", "unknown": "dim"}
+    risk_color = risk_colors[result.risk_level]
+
+    panel_lines = []
+    if result.country:
+        panel_lines.append(f"Location: {result.city}, {result.region}, {result.country} ({result.country_code})")
+    if result.isp:
+        panel_lines.append(f"ISP: {result.isp}")
+    if result.org:
+        panel_lines.append(f"Org: {result.org}")
+    if result.asn:
+        panel_lines.append(f"ASN: {result.asn}")
+    if result.is_proxy:
+        panel_lines.append("[yellow]⚠ Known proxy/VPN[/yellow]")
+    if result.is_hosting:
+        panel_lines.append("[yellow]⚠ Hosting/datacenter IP[/yellow]")
+    if result.abuse_score is not None:
+        panel_lines.append(f"Abuse Score: [{risk_color}]{result.abuse_score}/100[/{risk_color}] "
+                          f"({result.abuse_reports} reports)")
+        if result.abuse_categories:
+            panel_lines.append(f"Categories: {', '.join(result.abuse_categories)}")
+    elif not enricher.has_abuseipdb:
+        panel_lines.append("[dim]Set ABUSEIPDB_API_KEY for reputation data[/dim]")
+
+    console.print(Panel(
+        "\n".join(panel_lines),
+        title=f"[bold]{ip}[/bold] — [{risk_color}]{result.risk_level.upper()} RISK[/{risk_color}]",
+    ))
+    console.print(f"[dim]Sources: {', '.join(result.sources)}[/dim]")
+
+
+@app.command()
+def replay(
+    alert_file: str = typer.Argument(..., help="Path to a saved alert JSON (STIX bundle or NDJSON line)"),
+    with_ai: bool = typer.Option(False, "--ai", help="Add AI commentary per step (requires GEMINI_API_KEY)"),
+) -> None:
+    """
+    Replay a correlation alert step-by-step.
+
+    [bold]Examples:[/bold]
+      nano-siem replay alerts/2026-06-09/alert-abc123-correlation.json
+      nano-siem replay alert.json --ai
+    """
+    from nano_siem.reasoning.replay import build_replay, build_replay_with_commentary
+
+    path = Path(alert_file)
+    if not path.exists():
+        rprint(f"[red]File not found: {alert_file}[/red]")
+        raise typer.Exit(1)
+
+    data = json.loads(path.read_text())
+
+    if data.get("type") == "bundle":
+        alert = {}
+        for obj in data.get("objects", []):
+            if obj.get("type") == "observed-data":
+                custom = obj.get("custom_properties", {})
+                alert = {
+                    "alert_id": custom.get("x_nano_siem_alert_id", ""),
+                    "alert_type": custom.get("x_nano_siem_alert_type", ""),
+                    "severity": custom.get("x_nano_siem_severity", ""),
+                    "title": next((o.get("name", "") for o in data["objects"] if o.get("type") == "indicator"), ""),
+                    "source_key": custom.get("x_nano_siem_source", ""),
+                    "mitre_tactic": custom.get("x_nano_siem_mitre_tactic", ""),
+                    "mitre_techniques": custom.get("x_nano_siem_mitre_techniques", []),
+                    "duration_seconds": custom.get("x_nano_siem_duration_seconds", 0),
+                    "chain_steps": custom.get("x_nano_siem_chain_steps", []),
+                    "chain_id": custom.get("x_nano_siem_chain_id", ""),
+                    "timestamp": 0,
+                }
+    else:
+        alert = data
+
+    try:
+        if with_ai:
+            from nano_siem.reasoning.engine import ReasoningEngine
+            engine = ReasoningEngine()
+            if not engine.is_configured:
+                rprint("[yellow]GEMINI_API_KEY not set — replaying without AI commentary[/yellow]")
+                session = build_replay(alert)
+            else:
+                session = asyncio.run(build_replay_with_commentary(alert, engine))
+        else:
+            session = build_replay(alert)
+    except ValueError as e:
+        rprint(f"[red]{e}[/red]")
+        raise typer.Exit(1)
+
+    console.print(Panel(
+        f"[bold]{session.chain_title}[/bold]\n"
+        f"Severity: {session.severity.upper()} | Source: {session.source_key} | "
+        f"Duration: {session.duration_seconds:.0f}s | "
+        f"MITRE: {session.mitre_tactic} ({', '.join(session.mitre_techniques)})",
+        title="Attack Replay",
+    ))
+
+    for step in session.steps:
+        console.print(f"\n[bold cyan]Step {step.index + 1}/{session.step_count}[/bold cyan] — [bold]{step.step_name}[/bold]")
+        console.print(f"  [dim]Log:[/dim] {step.message}")
+        if step.commentary:
+            console.print(f"  [green]AI:[/green] {step.commentary}")
+
+    if session.summary:
+        console.print(Panel(session.summary, title="[bold]Threat Narrative[/bold]"))
+
 
 @app.callback(invoke_without_command=True)
 def main(
