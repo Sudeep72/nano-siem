@@ -1,9 +1,9 @@
 """
-nano-siem: A lightweight, zero-heavy-dependency SIEM engine.
+NanoSIEM — A production-grade, minimal-dependency SIEM engine.
 
-Pipeline:
-  Ingestion → Normalize → Sigma Eval → Correlation → ML Score → Alert → STIX Output
+Sigma detection · Attack chain correlation · ML anomaly scoring ·
+STIX 2.1 export · ATT&CK coverage reporting · SOC dashboard ·
+AI-powered incident reasoning.
 """
 
-__version__ = "3.0.0"
-__author__ = "Sudeep Ravichandran"
+__version__ = "4.0.0"

@@ -14,6 +14,9 @@ v2.0 commands (Detection Engineering):
   nano-siem coverage --json        Output coverage as JSON
   nano-siem coverage --markdown    Output coverage as Markdown
   nano-siem list-rules             List all loaded rules
+
+v3.0 commands (SOC Operations):
+  nano-siem api                    Start REST API + WebSocket server
 """
 
 from __future__ import annotations
@@ -30,13 +33,13 @@ from rich.table import Table
 
 app = typer.Typer(
     name="nano-siem",
-    help="NanoSIEM v2.0 — Detection Engineering Edition\n\nSigma detection · Attack chain correlation · ML anomaly scoring · STIX 2.1",
+    help="NanoSIEM v4.0 — AI Reasoning Edition\n\nSigma detection · Attack chain correlation · ML anomaly scoring · STIX 2.1 · SOC Dashboard · AI Reasoning",
     add_completion=False,
     rich_markup_mode="rich",
 )
 console = Console()
 
-VERSION = "3.0.0"
+VERSION = "4.0.0"
 
 
 # ── v1.0 Commands ─────────────────────────────────────────────────────────────
@@ -246,6 +249,7 @@ def coverage(
     """
     from nano_siem.correlation.chains import BUILTIN_CHAINS
     from nano_siem.detection.coverage import TACTIC_ORDER, build_coverage_report
+    from nano_siem.detection.mitre import REGISTRY
     from nano_siem.sigma.loader import load_rules_dir
 
     rules = load_rules_dir(rules_dir)
@@ -268,14 +272,13 @@ def coverage(
             print(content)
 
     else:
-        # Rich table output
         console.print()
         console.print(Panel(
             f"[bold]NanoSIEM ATT&CK Coverage Report[/bold]\n"
             f"Rules: [cyan]{report.total_rules}[/cyan]  "
             f"Chains: [cyan]{report.total_chains}[/cyan]  "
             f"Techniques covered: [green]{report.total_techniques_covered}[/green] / "
-            f"{len(__import__('nano_siem.detection.mitre', fromlist=['REGISTRY']).REGISTRY)}  "
+            f"{len(REGISTRY)}  "
             f"Coverage: [{'green' if report.coverage_percent > 30 else 'yellow'}]"
             f"{report.coverage_percent:.1f}%[/]",
             title="ATT&CK Coverage",
@@ -334,9 +337,10 @@ def list_rules(
         "critical": "red", "high": "red", "medium": "yellow",
         "low": "blue", "informational": "dim",
     }
+    level_rank = {"critical": 5, "high": 4, "medium": 3, "low": 2, "informational": 1}
 
-    for rule in sorted(rules, key=lambda r: -r.level_priority):
-        color = level_colors.get(rule.level, "white")
+    for rule in sorted(rules, key=lambda r: -level_rank.get(r.level.lower(), 0)):
+        color = level_colors.get(rule.level.lower(), "white")
         attack_tags = [t for t in rule.tags if t.startswith("attack.t")][:2]
         tags_str = ", ".join(attack_tags) if attack_tags else "—"
         table.add_row(
@@ -351,7 +355,7 @@ def list_rules(
     console.print(f"\n[dim]Rules directory: {rules_dir}[/dim]")
 
 
-
+# ── v3.0 Commands ─────────────────────────────────────────────────────────────
 
 @app.command()
 def api(
@@ -361,7 +365,7 @@ def api(
     reload: bool = typer.Option(False, "--reload", help="Auto-reload on code changes (dev mode)"),
 ) -> None:
     """
-    Start the NanoSIEM REST API + WebSocket server for the v3 dashboard.
+    Start the NanoSIEM REST API + WebSocket server for the SOC dashboard.
 
     [bold]Examples:[/bold]
       nano-siem api
@@ -376,7 +380,7 @@ def api(
         rprint("[red]uvicorn not installed. Run: pip install uvicorn[/red]")
         raise typer.Exit(1)
 
-    rprint(f"[bold cyan]NanoSIEM API v3.0.0[/bold cyan] starting on [green]http://{host}:{port}[/green]")
+    rprint(f"[bold cyan]NanoSIEM API v{VERSION}[/bold cyan] starting on [green]http://{host}:{port}[/green]")
     rprint(f"[dim]Docs: http://{host}:{port}/docs[/dim]")
     rprint(f"[dim]WebSocket: ws://{host}:{port}/ws/events[/dim]")
     rprint("[dim]Dashboard: http://localhost:5173 (run: cd dashboard && npm run dev)[/dim]")
@@ -390,12 +394,15 @@ def api(
         log_level="info",
     )
 
+
+# ── Main callback ─────────────────────────────────────────────────────────────
+
 @app.callback(invoke_without_command=True)
 def main(
     ctx: typer.Context,
     version: bool = typer.Option(False, "--version", "-v", help="Show version and exit"),
 ) -> None:
-    """NanoSIEM — Production-grade SIEM engine with Sigma detection, attack chain correlation, ML anomaly scoring, and STIX 2.1 export."""
+    """NanoSIEM — Production-grade SIEM engine with Sigma detection, attack chain correlation, ML anomaly scoring, STIX 2.1 export, SOC dashboard, and AI-powered incident reasoning."""
     if version:
         rprint(f"[bold cyan]NanoSIEM[/bold cyan] v{VERSION}")
         raise typer.Exit(0)

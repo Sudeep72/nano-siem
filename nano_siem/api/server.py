@@ -257,3 +257,136 @@ async def websocket_events(ws: WebSocket):
         ws_manager.disconnect(ws)
     except Exception:
         ws_manager.disconnect(ws)
+
+
+# ── AI Reasoning endpoints (v4) ───────────────────────────────────────────────
+# These endpoints receive already-generated alerts and return AI explanations.
+# Gemini never performs detection — only narrates confirmed alerts.
+
+from pydantic import BaseModel as PydanticBase
+
+from nano_siem.reasoning.engine import ReasoningEngine
+
+
+class AIRequest(PydanticBase):
+    alert_id: str | None = None
+    alert_ids: list[str] | None = None
+    period: str = "last 24 hours"
+
+_reasoning: ReasoningEngine | None = None
+
+def _get_reasoning() -> ReasoningEngine:
+    global _reasoning
+    if _reasoning is None:
+        import os
+        _reasoning = ReasoningEngine(api_key=os.environ.get("GEMINI_API_KEY"))
+    return _reasoning
+
+def _get_alert_by_id(alert_id: str) -> dict | None:
+    if not _pipeline:
+        return None
+    alerts = _pipeline.get_recent_alerts(limit=500)
+    for a in alerts:
+        if a.get("alert_id", "").startswith(alert_id) or a.get("fingerprint", "") == alert_id:
+            return a
+    return None
+
+def _get_alerts_by_ids(alert_ids: list[str]) -> list[dict]:
+    if not _pipeline:
+        return []
+    all_alerts = _pipeline.get_recent_alerts(limit=500)
+    result = []
+    for a in all_alerts:
+        aid = a.get("alert_id", "")
+        if any(aid.startswith(i) or i.startswith(aid[:8]) for i in alert_ids):
+            result.append(a)
+    return result
+
+
+@app.post("/api/ai/explain")
+async def ai_explain(req: AIRequest):
+    """Explain a single alert to an L1/L2 SOC analyst."""
+    if not req.alert_id:
+        raise HTTPException(400, "alert_id required")
+    alert = _get_alert_by_id(req.alert_id)
+    if not alert:
+        raise HTTPException(404, f"Alert {req.alert_id} not found")
+    engine = _get_reasoning()
+    result = await engine.explain_alert(alert)
+    return result.to_dict()
+
+
+@app.post("/api/ai/summary")
+async def ai_summary(req: AIRequest):
+    """Generate an incident summary across multiple alerts."""
+    if req.alert_ids:
+        alerts = _get_alerts_by_ids(req.alert_ids)
+    else:
+        alerts = _pipeline.get_recent_alerts(limit=20) if _pipeline else []
+    if not alerts:
+        raise HTTPException(404, "No alerts found")
+    engine = _get_reasoning()
+    result = await engine.summarize_incident(alerts)
+    return result.to_dict()
+
+
+@app.post("/api/ai/mitre")
+async def ai_mitre(req: AIRequest):
+    """Explain MITRE ATT&CK techniques referenced in an alert."""
+    if not req.alert_id:
+        raise HTTPException(400, "alert_id required")
+    alert = _get_alert_by_id(req.alert_id)
+    if not alert:
+        raise HTTPException(404, f"Alert {req.alert_id} not found")
+    engine = _get_reasoning()
+    result = await engine.explain_mitre(alert)
+    return result.to_dict()
+
+
+@app.post("/api/ai/recommend")
+async def ai_recommend(req: AIRequest):
+    """Generate prioritized action plan for an alert."""
+    if not req.alert_id:
+        raise HTTPException(400, "alert_id required")
+    alert = _get_alert_by_id(req.alert_id)
+    if not alert:
+        raise HTTPException(404, f"Alert {req.alert_id} not found")
+    engine = _get_reasoning()
+    result = await engine.recommend_actions(alert)
+    return result.to_dict()
+
+
+@app.post("/api/ai/report")
+async def ai_report(req: AIRequest):
+    """Generate executive-level security report."""
+    alerts = _pipeline.get_recent_alerts(limit=50) if _pipeline else []
+    engine = _get_reasoning()
+    result = await engine.generate_executive_report(alerts, period=req.period)
+    return result.to_dict()
+
+
+@app.post("/api/ai/narrative")
+async def ai_narrative(req: AIRequest):
+    """Generate threat narrative (attack story) from multiple alerts."""
+    if req.alert_ids:
+        alerts = _get_alerts_by_ids(req.alert_ids)
+    else:
+        alerts = _pipeline.get_recent_alerts(limit=20) if _pipeline else []
+    if not alerts:
+        raise HTTPException(404, "No alerts found")
+    engine = _get_reasoning()
+    result = await engine.generate_threat_narrative(alerts)
+    return result.to_dict()
+
+
+@app.get("/api/ai/status")
+async def ai_status():
+    """Check if AI reasoning is configured and available."""
+    import os
+    engine = _get_reasoning()
+    return {
+        "configured": engine.is_configured,
+        "model": "gemini-2.5-flash",
+        "stats": engine.get_stats(),
+        "api_key_set": bool(os.environ.get("GEMINI_API_KEY")),
+    }

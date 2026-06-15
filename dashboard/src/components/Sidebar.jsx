@@ -1,6 +1,7 @@
-import { Shield, Bell, Activity, BookOpen, Target } from 'lucide-react'
+import { Shield, Bell, Activity, BookOpen, Target, Brain } from 'lucide-react'
 
 const ICONS = {
+  'AI Analyst': Brain,
   'Alerts': Bell,
   'Events': Activity,
   'Rules': BookOpen,

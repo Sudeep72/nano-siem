@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nano-siem"
-version = "3.0.0"
-description = "A production-grade, minimal-dependency SIEM engine with Sigma detection, ATT&CK coverage reporting, rule validation, attack chain correlation, ML anomaly scoring, and STIX 2.1 export"
+version = "4.0.0"
+description = "A production-grade, minimal-dependency SIEM engine with Sigma detection, ATT&CK coverage reporting, rule validation, attack chain correlation, ML anomaly scoring, STIX 2.1 export, SOC dashboard, and AI-powered incident reasoning"
 readme = "README.md"
 license = { file = "LICENSE" }
 authors = [
@@ -13,7 +13,8 @@ authors = [
 ]
 keywords = [
     "siem", "security", "sigma", "detection-engineering", "soc",
-    "anomaly-detection", "stix", "threat-detection", "cybersecurity"
+    "anomaly-detection", "stix", "threat-detection", "cybersecurity",
+    "mitre-attack", "ai-security"
 ]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -64,6 +65,7 @@ Roadmap = "https://github.com/Sudeep72/nano-siem/blob/main/ROADMAP.md"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["nano_siem*"]
+exclude = ["data*", "rules*", "alerts*", "dashboard*", "tests*", "examples*", "docs*"]
 
 [tool.setuptools.package-data]
 nano_siem = ["py.typed"]
@@ -81,10 +83,7 @@ target-version = "py310"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP"]
-ignore = [
-    "E501",   # line too long — handled by formatter
-    "N806",   # variable in function should be lowercase (conflicts with some patterns)
-]
+ignore = ["E501", "N806"]
 
 [tool.mypy]
 python_version = "3.10"
