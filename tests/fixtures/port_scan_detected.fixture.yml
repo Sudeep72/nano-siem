@@ -1,0 +1,14 @@
+title: Port Scan Detected Fixtures
+rule: rules/sample/port_scan_detected.yml
+tests:
+  - description: "Should fire: Port Scan in message"
+    should_match: true
+    log: 'CEF:0|Snort|IDS|2.9|1000001|Port Scan Detected|8|src=192.168.1.5 dst=10.0.0.1'
+
+  - description: "Should fire: portscan lowercase"
+    should_match: true
+    log: '{"message":"portscan detected from 192.168.100.5","host":"fw-01","level":"warn"}'
+
+  - description: "Should NOT fire: normal connection"
+    should_match: false
+    log: '<13>1 2026-06-02T10:00:00Z fw-01 firewalld - - - ACCEPT TCP 192.168.1.10:54321 -> 10.0.0.1:443'

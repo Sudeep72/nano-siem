@@ -1,0 +1,592 @@
+"""
+api/server.py — NanoSIEM FastAPI Backend
+
+Provides REST endpoints and a WebSocket live event stream
+for the v3 React dashboard.
+
+Endpoints:
+  GET  /                    Health check
+  GET  /api/health          Health + pipeline status
+  GET  /api/stats           Pipeline stats (events/sec, hits, anomalies)
+  GET  /api/alerts          Recent alerts (paginated)
+  GET  /api/events          Recent events from ring buffer (paginated)
+  GET  /api/rules           Loaded Sigma rules
+  GET  /api/chains          Built-in correlation chains
+  GET  /api/coverage        ATT&CK coverage JSON
+  WS   /ws/events           Live event+alert stream (WebSocket broadcast)
+
+The pipeline runs as a background task alongside the API server.
+WebSocket clients receive every event+alert as it fires — no polling needed.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+import time
+from contextlib import asynccontextmanager
+from pathlib import Path
+from typing import Any
+
+import yaml
+from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel as PydanticBase
+
+from nano_siem.api.models import (
+    AlertModel,
+    ChainModel,
+    CoverageModel,
+    EventModel,
+    HealthModel,
+    RuleModel,
+    StatsModel,
+)
+from nano_siem.api.pipeline import PipelineManager
+from nano_siem.detection.quality import assess_all_rules
+from nano_siem.enrichment.threat_intel import ThreatIntelEnricher
+from nano_siem.incidents.store import IncidentStore
+from nano_siem.reasoning.engine import ReasoningEngine
+from nano_siem.reasoning.knowledge_graph import build_knowledge_graph, describe_entity
+from nano_siem.reasoning.replay import build_replay, build_replay_with_commentary
+
+logger = logging.getLogger(__name__)
+
+# ── Global pipeline manager ───────────────────────────────────────────────────
+_pipeline: PipelineManager | None = None
+_start_time: float = time.time()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Start the detection pipeline when the API server starts."""
+    global _pipeline
+    config = _load_config()
+    _pipeline = PipelineManager(config)
+    await _pipeline.start()
+    logger.info("NanoSIEM pipeline started via API server")
+    yield
+    await _pipeline.stop()
+    logger.info("NanoSIEM pipeline stopped")
+
+
+def _load_config(path: str = "config.yaml") -> dict[str, Any]:
+    try:
+        with open(path) as f:
+            return yaml.safe_load(f)
+    except FileNotFoundError:
+        return {}
+
+
+# ── App ───────────────────────────────────────────────────────────────────────
+app = FastAPI(
+    title="NanoSIEM API",
+    description="NanoSIEM v3.0 — SOC Operations Edition REST API",
+    version="5.0.0",
+    lifespan=lifespan,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],   # dev mode — restrict in production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# ── WebSocket connection manager ──────────────────────────────────────────────
+class ConnectionManager:
+    def __init__(self) -> None:
+        self._connections: list[WebSocket] = []
+
+    async def connect(self, ws: WebSocket) -> None:
+        await ws.accept()
+        self._connections.append(ws)
+        logger.debug("WebSocket client connected. Total: %d", len(self._connections))
+
+    def disconnect(self, ws: WebSocket) -> None:
+        if ws in self._connections:
+            self._connections.remove(ws)
+        logger.debug("WebSocket client disconnected. Total: %d", len(self._connections))
+
+    async def broadcast(self, message: dict) -> None:
+        dead = []
+        for ws in self._connections:
+            try:
+                await ws.send_json(message)
+            except Exception:
+                dead.append(ws)
+        for ws in dead:
+            self.disconnect(ws)
+
+    @property
+    def connection_count(self) -> int:
+        return len(self._connections)
+
+
+ws_manager = ConnectionManager()
+
+
+# ── REST Endpoints ────────────────────────────────────────────────────────────
+
+@app.get("/", response_model=HealthModel)
+async def root():
+    return await health()
+
+
+@app.get("/api/health", response_model=HealthModel)
+async def health():
+    rules_loaded = 0
+    if _pipeline:
+        rules_loaded = _pipeline.sigma_engine.rule_count if _pipeline.sigma_engine else 0
+    return HealthModel(
+        status="ok",
+        version="5.0.0",
+        pipeline_running=_pipeline is not None and _pipeline.running,
+        rules_loaded=rules_loaded,
+        uptime_seconds=round(time.time() - _start_time, 1),
+    )
+
+
+@app.get("/api/stats", response_model=StatsModel)
+async def stats():
+    if not _pipeline:
+        raise HTTPException(503, "Pipeline not running")
+    s = _pipeline.get_stats()
+    return StatsModel(**s)
+
+
+@app.get("/api/alerts", response_model=list[AlertModel])
+async def get_alerts(
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    severity: str | None = Query(None),
+    alert_type: str | None = Query(None),
+):
+    if not _pipeline:
+        raise HTTPException(503, "Pipeline not running")
+    alerts = _pipeline.get_recent_alerts(limit=limit, offset=offset,
+                                          severity=severity, alert_type=alert_type)
+    return alerts
+
+
+@app.get("/api/events", response_model=list[EventModel])
+async def get_events(
+    limit: int = Query(100, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
+    host: str | None = Query(None),
+    has_alert: bool | None = Query(None),
+):
+    if not _pipeline:
+        raise HTTPException(503, "Pipeline not running")
+    events = await _pipeline.get_recent_events(limit=limit, offset=offset,
+                                                host=host, has_alert=has_alert)
+    return events
+
+
+@app.get("/api/rules", response_model=list[RuleModel])
+async def get_rules():
+    if not _pipeline or not _pipeline.sigma_engine:
+        raise HTTPException(503, "Pipeline not running")
+    rules = []
+    for rule in _pipeline.sigma_engine._rules:
+        mitre = [t for t in rule.tags if t.lower().startswith("attack.t")]
+        rules.append(RuleModel(
+            title=rule.title,
+            level=rule.level,
+            status=rule.status,
+            id=rule.id,
+            tags=rule.tags,
+            description=rule.description,
+            source_file=Path(rule.source_file).name,
+            mitre_techniques=mitre,
+        ))
+    return sorted(rules, key=lambda r: -{"critical":5,"high":4,"medium":3,"low":2,"informational":1}.get(r.level,0))
+
+
+@app.get("/api/chains", response_model=list[ChainModel])
+async def get_chains():
+    from nano_siem.correlation.chains import BUILTIN_CHAINS
+    return [
+        ChainModel(
+            id=c.id,
+            title=c.title,
+            description=c.description,
+            severity=c.severity,
+            window_seconds=c.window_seconds,
+            mitre_tactic=c.mitre_tactic,
+            mitre_techniques=c.mitre_techniques,
+            steps=[s.name for s in c.steps],
+        )
+        for c in BUILTIN_CHAINS
+    ]
+
+
+@app.get("/api/coverage", response_model=CoverageModel)
+async def get_coverage():
+    if not _pipeline or not _pipeline.sigma_engine:
+        raise HTTPException(503, "Pipeline not running")
+    from nano_siem.correlation.chains import BUILTIN_CHAINS
+    from nano_siem.detection.coverage import build_coverage_report
+    rules = _pipeline.sigma_engine._rules
+    report = build_coverage_report(rules, BUILTIN_CHAINS)
+    d = report.to_dict()
+    return CoverageModel(**d)
+
+
+# ── WebSocket endpoint ────────────────────────────────────────────────────────
+
+@app.websocket("/ws/events")
+async def websocket_events(ws: WebSocket):
+    """
+    Live event stream. Sends JSON messages as events flow through the pipeline.
+
+    Message types:
+      { "type": "event",  "data": EventModel }
+      { "type": "alert",  "data": AlertModel }
+      { "type": "stats",  "data": StatsModel }
+      { "type": "ping",   "data": {} }
+    """
+    await ws_manager.connect(ws)
+    if _pipeline:
+        _pipeline.register_ws_manager(ws_manager)
+    try:
+        # Send a welcome ping with current stats
+        if _pipeline:
+            await ws.send_json({"type": "ping", "data": {"connected": True,
+                "clients": ws_manager.connection_count}})
+        while True:
+            # Keep connection alive — pipeline pushes data via broadcast
+            await asyncio.sleep(30)
+            await ws.send_json({"type": "ping", "data": {}})
+    except WebSocketDisconnect:
+        ws_manager.disconnect(ws)
+    except Exception:
+        ws_manager.disconnect(ws)
+
+
+# ── AI Reasoning endpoints (v4) ───────────────────────────────────────────────
+# These endpoints receive already-generated alerts and return AI explanations.
+# Gemini never performs detection — only narrates confirmed alerts.
+
+class AIRequest(PydanticBase):
+    alert_id: str | None = None
+    alert_ids: list[str] | None = None
+    period: str = "last 24 hours"
+
+_reasoning: ReasoningEngine | None = None
+
+def _get_reasoning() -> ReasoningEngine:
+    global _reasoning
+    if _reasoning is None:
+        import os
+        _reasoning = ReasoningEngine(api_key=os.environ.get("GEMINI_API_KEY"))
+    return _reasoning
+
+def _get_alert_by_id(alert_id: str) -> dict | None:
+    if not _pipeline:
+        return None
+    alerts = _pipeline.get_recent_alerts(limit=500)
+    for a in alerts:
+        if a.get("alert_id", "").startswith(alert_id) or a.get("fingerprint", "") == alert_id:
+            return a
+    return None
+
+def _get_alerts_by_ids(alert_ids: list[str]) -> list[dict]:
+    if not _pipeline:
+        return []
+    all_alerts = _pipeline.get_recent_alerts(limit=500)
+    result = []
+    for a in all_alerts:
+        aid = a.get("alert_id", "")
+        if any(aid.startswith(i) or i.startswith(aid[:8]) for i in alert_ids):
+            result.append(a)
+    return result
+
+
+@app.post("/api/ai/explain")
+async def ai_explain(req: AIRequest):
+    """Explain a single alert to an L1/L2 SOC analyst."""
+    if not req.alert_id:
+        raise HTTPException(400, "alert_id required")
+    alert = _get_alert_by_id(req.alert_id)
+    if not alert:
+        raise HTTPException(404, f"Alert {req.alert_id} not found")
+    engine = _get_reasoning()
+    result = await engine.explain_alert(alert)
+    return result.to_dict()
+
+
+@app.post("/api/ai/summary")
+async def ai_summary(req: AIRequest):
+    """Generate an incident summary across multiple alerts."""
+    if req.alert_ids:
+        alerts = _get_alerts_by_ids(req.alert_ids)
+    else:
+        alerts = _pipeline.get_recent_alerts(limit=20) if _pipeline else []
+    if not alerts:
+        raise HTTPException(404, "No alerts found")
+    engine = _get_reasoning()
+    result = await engine.summarize_incident(alerts)
+    return result.to_dict()
+
+
+@app.post("/api/ai/mitre")
+async def ai_mitre(req: AIRequest):
+    """Explain MITRE ATT&CK techniques referenced in an alert."""
+    if not req.alert_id:
+        raise HTTPException(400, "alert_id required")
+    alert = _get_alert_by_id(req.alert_id)
+    if not alert:
+        raise HTTPException(404, f"Alert {req.alert_id} not found")
+    engine = _get_reasoning()
+    result = await engine.explain_mitre(alert)
+    return result.to_dict()
+
+
+@app.post("/api/ai/recommend")
+async def ai_recommend(req: AIRequest):
+    """Generate prioritized action plan for an alert."""
+    if not req.alert_id:
+        raise HTTPException(400, "alert_id required")
+    alert = _get_alert_by_id(req.alert_id)
+    if not alert:
+        raise HTTPException(404, f"Alert {req.alert_id} not found")
+    engine = _get_reasoning()
+    result = await engine.recommend_actions(alert)
+    return result.to_dict()
+
+
+@app.post("/api/ai/report")
+async def ai_report(req: AIRequest):
+    """Generate executive-level security report."""
+    alerts = _pipeline.get_recent_alerts(limit=50) if _pipeline else []
+    engine = _get_reasoning()
+    result = await engine.generate_executive_report(alerts, period=req.period)
+    return result.to_dict()
+
+
+@app.post("/api/ai/narrative")
+async def ai_narrative(req: AIRequest):
+    """Generate threat narrative (attack story) from multiple alerts."""
+    if req.alert_ids:
+        alerts = _get_alerts_by_ids(req.alert_ids)
+    else:
+        alerts = _pipeline.get_recent_alerts(limit=20) if _pipeline else []
+    if not alerts:
+        raise HTTPException(404, "No alerts found")
+    engine = _get_reasoning()
+    result = await engine.generate_threat_narrative(alerts)
+    return result.to_dict()
+
+
+@app.get("/api/ai/status")
+async def ai_status():
+    """Check if AI reasoning is configured and available."""
+    import os
+    engine = _get_reasoning()
+    return {
+        "configured": engine.is_configured,
+        "model": "gemini-1.5-flash",
+        "stats": engine.get_stats(),
+        "api_key_set": bool(os.environ.get("GEMINI_API_KEY")),
+    }
+
+
+# ── v2.1 / v3.1 / v4.1 endpoints ──────────────────────────────────────────────
+# Rule quality metrics, hot reload status, threat intel enrichment,
+# knowledge graph, and attack replay.
+
+_enricher: ThreatIntelEnricher | None = None
+
+def _get_enricher() -> ThreatIntelEnricher:
+    global _enricher
+    if _enricher is None:
+        _enricher = ThreatIntelEnricher()
+    return _enricher
+
+
+@app.get("/api/quality")
+async def get_quality():
+    """Rule quality metrics: complexity, specificity, FP risk, overlaps."""
+    if not _pipeline or not _pipeline.sigma_engine:
+        raise HTTPException(503, "Pipeline not running")
+    reports = assess_all_rules(_pipeline.sigma_engine._rules)
+    avg_score = sum(r.maintenance_score for r in reports) / len(reports) if reports else 0
+    return {
+        "rules": [r.to_dict() for r in reports],
+        "average_maintenance_score": round(avg_score, 1),
+        "high_fp_risk_count": sum(1 for r in reports if r.fp_risk == "high"),
+    }
+
+
+@app.get("/api/reload/status")
+async def reload_status():
+    """Hot reload manager status and history."""
+    if not _pipeline:
+        raise HTTPException(503, "Pipeline not running")
+    if not hasattr(_pipeline, "_hot_reload") or _pipeline._hot_reload is None:
+        return {
+            "enabled": False,
+            "message": "Hot reload manager not active on this pipeline instance",
+        }
+    return {"enabled": True, **_pipeline._hot_reload.get_stats()}
+
+
+@app.get("/api/enrich/{ip}")
+async def enrich_ip(ip: str):
+    """Enrich an IP address with geolocation and reputation data."""
+    enricher = _get_enricher()
+    result = await enricher.enrich(ip)
+    return result.to_dict()
+
+
+@app.get("/api/graph")
+async def get_knowledge_graph():
+    """Build a knowledge graph from recent alerts."""
+    if not _pipeline:
+        raise HTTPException(503, "Pipeline not running")
+    alerts = _pipeline.get_recent_alerts(limit=200)
+    graph = build_knowledge_graph(alerts)
+    return graph.to_dict()
+
+
+@app.get("/api/graph/{entity_id}")
+async def get_graph_entity(entity_id: str, depth: int = Query(1, ge=1, le=3)):
+    """Get a subgraph and description for a specific entity (e.g. 'ip:203.0.113.5')."""
+    if not _pipeline:
+        raise HTTPException(503, "Pipeline not running")
+    alerts = _pipeline.get_recent_alerts(limit=200)
+    graph = build_knowledge_graph(alerts)
+    if entity_id not in graph.nodes:
+        raise HTTPException(404, f"Entity '{entity_id}' not found in graph")
+    sub = graph.subgraph_for(entity_id, depth=depth)
+    return {
+        "description": describe_entity(graph, entity_id),
+        "graph": sub.to_dict(),
+    }
+
+
+@app.post("/api/replay")
+async def replay_alert(req: AIRequest):
+    """
+    Replay a correlation alert step-by-step.
+    Set req.alert_id. If GEMINI_API_KEY is configured, pass with_ai via
+    the 'period' field set to 'ai' to include AI commentary (reuses AIRequest schema).
+    """
+    if not req.alert_id:
+        raise HTTPException(400, "alert_id required")
+    alert = _get_alert_by_id(req.alert_id)
+    if not alert:
+        raise HTTPException(404, f"Alert {req.alert_id} not found")
+
+    with_ai = req.period == "ai"
+    try:
+        if with_ai:
+            engine = _get_reasoning()
+            if not engine.is_configured:
+                session = build_replay(alert)
+            else:
+                session = await build_replay_with_commentary(alert, engine)
+        else:
+            session = build_replay(alert)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+    return session.to_dict()
+
+
+# ── v5.0 endpoints ─────────────────────────────────────────────────────────────
+# Incident lifecycle, FP feedback, enrichment auto-lookup
+
+_incident_store: IncidentStore | None = None
+
+def _get_incident_store() -> IncidentStore:
+    global _incident_store
+    if _incident_store is None:
+        _incident_store = IncidentStore()
+        # Wire ML scorer for FP retraining if pipeline is running
+        if _pipeline and hasattr(_pipeline, "_scorer") and _pipeline._scorer:
+            _incident_store.set_ml_scorer(_pipeline._scorer)
+    return _incident_store
+
+
+class CreateIncidentRequest(PydanticBase):
+    alert_ids: list[str]
+    title: str | None = None
+
+
+class UpdateIncidentRequest(PydanticBase):
+    state: str | None = None
+    owner: str | None = None
+    disposition: str | None = None
+    note_author: str | None = None
+    note_content: str | None = None
+    fp_fingerprints: list[str] | None = None
+
+
+@app.post("/api/incidents")
+async def create_incident(req: CreateIncidentRequest):
+    """Create an incident from one or more alert IDs."""
+    if not _pipeline:
+        raise HTTPException(503, "Pipeline not running")
+    alerts = _get_alerts_by_ids(req.alert_ids)
+    if not alerts:
+        raise HTTPException(404, "No matching alerts found")
+    store = _get_incident_store()
+    if len(alerts) == 1:
+        incident = store.create_from_alert(alerts[0])
+    else:
+        incident = store.create_from_alerts(alerts, title=req.title)
+    return incident.to_dict()
+
+
+@app.get("/api/incidents")
+async def list_incidents(state: str | None = None, owner: str | None = None, limit: int = 50):
+    """List all incidents, optionally filtered by state or owner."""
+    store = _get_incident_store()
+    incidents = store.list_all(state=state, owner=owner, limit=limit)
+    return {"incidents": [i.to_dict() for i in incidents], "total": len(incidents)}
+
+
+@app.get("/api/incidents/{incident_id}")
+async def get_incident(incident_id: str):
+    """Get a single incident by ID."""
+    store = _get_incident_store()
+    incident = store.get(incident_id)
+    if not incident:
+        raise HTTPException(404, f"Incident {incident_id} not found")
+    return incident.to_dict()
+
+
+@app.patch("/api/incidents/{incident_id}")
+async def update_incident(incident_id: str, req: UpdateIncidentRequest):
+    """
+    Update an incident — state transition, owner assignment, note, or disposition.
+    Multiple fields can be updated in one call.
+    """
+    store = _get_incident_store()
+    incident = store.get(incident_id)
+    if not incident:
+        raise HTTPException(404, f"Incident {incident_id} not found")
+
+    try:
+        if req.state:
+            store.update_state(incident_id, req.state)
+        if req.owner:
+            store.assign_owner(incident_id, req.owner)
+        if req.note_author and req.note_content:
+            store.add_note(incident_id, req.note_author, req.note_content)
+        if req.disposition:
+            store.set_disposition(incident_id, req.disposition, fingerprints=req.fp_fingerprints)
+    except (ValueError, KeyError) as e:
+        raise HTTPException(400, str(e))
+
+    return store.get(incident_id).to_dict()
+
+
+@app.get("/api/incidents/stats/summary")
+async def incident_stats():
+    """Incident store stats including FP feedback loop counters."""
+    return _get_incident_store().get_stats()

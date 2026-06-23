@@ -1,0 +1,32 @@
+title: SQL Injection Attempt
+id: b2c4e6f8-1234-4abc-8def-000000000020
+status: stable
+description: >
+  Detects common SQL injection patterns in web logs. SQL injection allows
+  attackers to manipulate database queries to extract or modify data.
+author: NanoSIEM
+date: 2026-06-01
+tags:
+  - attack.initial_access
+  - attack.t1190
+logsource:
+  product: webserver
+level: high
+detection:
+  sqli_patterns:
+    message|contains:
+      - "' OR '"
+      - "' OR 1=1"
+      - "UNION SELECT"
+      - "UNION ALL SELECT"
+      - "; DROP TABLE"
+      - "' --"
+      - "' #"
+      - "1=1--"
+      - "or 1=1"
+      - "AND 1=1"
+  condition: sqli_patterns
+falsepositives:
+  - Web Application Firewall testing
+  - Authorized penetration testing
+  - Security scanner false positives

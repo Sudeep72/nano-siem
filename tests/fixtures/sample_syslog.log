@@ -1,0 +1,8 @@
+<34>1 2026-06-02T10:00:00Z web-01 sshd 1234 - - Failed password for root from 192.168.1.100 port 22 ssh2
+<34>1 2026-06-02T10:00:01Z web-01 sshd 1234 - - Failed password for root from 192.168.1.100 port 22 ssh2
+<34>1 2026-06-02T10:00:02Z web-01 sshd 1234 - - Failed password for invalid user admin from 192.168.1.100 port 22 ssh2
+<34>1 2026-06-02T10:00:03Z web-01 sshd 1234 - - Failed password for root from 192.168.1.100 port 22 ssh2
+<34>1 2026-06-02T10:00:04Z web-01 sshd 1235 - - Accepted password for deploy from 10.0.0.5 port 54321 ssh2
+<86>1 2026-06-02T10:01:00Z db-01 sudo 5678 - - sudo: user www-data ran /bin/bash as root
+<14>1 2026-06-02T10:02:00Z fw-01 firewalld 9012 - - REJECT TCP 203.0.113.5:4444 -> 10.0.0.1:80
+<86>Jun  2 10:03:00 app-01 sshd[1111]: Failed password for root from 10.10.10.10 port 2222 ssh2

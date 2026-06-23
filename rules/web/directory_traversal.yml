@@ -1,0 +1,29 @@
+title: Directory Traversal Attempt
+id: b2c4e6f8-1234-4abc-8def-000000000021
+status: stable
+description: >
+  Detects directory traversal (path traversal) attempts in web requests.
+  Attackers use ../ sequences to access files outside the web root.
+author: NanoSIEM
+date: 2026-06-01
+tags:
+  - attack.initial_access
+  - attack.t1190
+logsource:
+  product: webserver
+level: medium
+detection:
+  traversal_patterns:
+    message|contains:
+      - '../'
+      - '..%2F'
+      - '..%5C'
+      - '%2e%2e%2f'
+      - '..../'
+      - '/etc/passwd'
+      - '/etc/shadow'
+      - 'WEB-INF/'
+  condition: traversal_patterns
+falsepositives:
+  - Relative URL paths that legitimately contain ../ in some frameworks
+  - Web scanners (authorized)

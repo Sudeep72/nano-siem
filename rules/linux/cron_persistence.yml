@@ -1,0 +1,35 @@
+title: Suspicious Cron Job Added
+id: b2c4e6f8-1234-4abc-8def-000000000010
+status: stable
+description: >
+  Detects cron job additions that may indicate persistence by an attacker.
+  Legitimate cron jobs are typically added by package managers or system admins
+  during known maintenance windows, not at unusual hours.
+author: NanoSIEM
+date: 2026-06-01
+tags:
+  - attack.persistence
+  - attack.t1053.003
+logsource:
+  product: linux
+  service: syslog
+level: medium
+detection:
+  cron_add:
+    message|contains:
+      - 'crontab'
+      - 'cron.d'
+      - 'cron.daily'
+      - 'cron.hourly'
+  suspicious_content:
+    message|contains:
+      - '/tmp'
+      - '/dev/shm'
+      - 'wget'
+      - 'curl'
+      - 'bash -i'
+      - 'nc -e'
+  condition: cron_add and suspicious_content
+falsepositives:
+  - Legitimate deployment scripts that write cron jobs
+  - Package manager operations

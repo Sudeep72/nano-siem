@@ -1,0 +1,14 @@
+title: Privilege Escalation via Sudo Fixtures
+rule: rules/sample/privilege_escalation_sudo.yml
+tests:
+  - description: "Should fire: sudo as root"
+    should_match: true
+    log: '<86>1 2026-06-02T10:00:00Z host sudo - - - deploy ran COMMAND=/bin/bash as root uid=0'
+
+  - description: "Should fire: COMMAND= pattern"
+    should_match: true
+    log: '<86>1 2026-06-02T10:00:00Z host sudo - - - www-data : TTY=pts/0 ; PWD=/var/www ; USER=root ; COMMAND=/usr/bin/python3 exploit.py'
+
+  - description: "Should NOT fire: sudo session close"
+    should_match: false
+    log: '<86>1 2026-06-02T10:00:01Z host sudo - - - pam_unix(sudo:session): session closed for user root'

@@ -1,0 +1,18 @@
+title: SSH Brute Force Fixtures
+rule: rules/sample/ssh_brute_force.yml
+tests:
+  - description: "Should fire: classic failed password"
+    should_match: true
+    log: '<34>1 2026-06-02T03:00:01Z web-01 sshd - - - Failed password for root from 203.0.113.5 port 22 ssh2'
+
+  - description: "Should fire: invalid user"
+    should_match: true
+    log: '<34>1 2026-06-02T03:00:01Z web-01 sshd - - - Invalid user hacker from 5.5.5.5 port 22 ssh2'
+
+  - description: "Should NOT fire: successful login"
+    should_match: false
+    log: '<34>1 2026-06-02T10:00:00Z web-01 sshd - - - Accepted publickey for deploy from 192.168.1.10 port 54321 ssh2'
+
+  - description: "Should NOT fire: session opened"
+    should_match: false
+    log: '<86>1 2026-06-02T10:00:01Z web-01 sshd - - - pam_unix(sshd:session): session opened for user deploy'

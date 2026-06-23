@@ -1,0 +1,32 @@
+title: Reverse Shell Attempt
+id: b2c4e6f8-1234-4abc-8def-000000000013
+status: stable
+description: >
+  Detects common reverse shell patterns in log messages. Reverse shells
+  are used by attackers to establish command and control channels after
+  initial access.
+author: NanoSIEM
+date: 2026-06-01
+tags:
+  - attack.execution
+  - attack.command_and_control
+  - attack.t1059.004
+logsource:
+  product: linux
+  service: syslog
+level: critical
+detection:
+  reverse_shell_patterns:
+    message|contains:
+      - '/dev/tcp/'
+      - '/dev/udp/'
+      - 'bash -i >&'
+      - 'bash -i >& /dev'
+      - 'nc -e /bin'
+      - 'ncat -e /bin'
+      - 'python -c.*socket'
+      - 'perl -e.*socket'
+  condition: reverse_shell_patterns
+falsepositives:
+  - Security testing and red team exercises (authorized)
+  - CTF challenges
